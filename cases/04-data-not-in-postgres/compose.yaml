@@ -1,0 +1,81 @@
+# n8n production stack: Fenwick Analytics
+# moved onto Postgres 2026-06-14 (OPS-731)
+# owner: ops@fenwick-analytics.example
+#
+# TODO(feb): get the DB creds out of .env and into docker secrets, this file
+# ships in the deploy repo and .env is checked in next to it :(
+
+name: docklab-04
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # nightly dump runs on the host via cron, see runbook
+    # - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U n8n -d n8n"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.33.0
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "5604:5678"
+    environment:
+      # --- database (Postgres since the OPS-731 migration) ---
+      DB_TYPE: postgres
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: "5432"
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      # DB_POSTGRESDB_SCHEMA: n8n_prod  # TODO(OPS-812) one schema per env
+      TZ: Europe/Berlin
+
+      # --- encryption key, pinned so redeploys keep working ---
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+
+      # --- owner comes from env, no signup wizard on this box ---
+      N8N_INSTANCE_OWNER_MANAGED_BY_ENV: "true"
+      N8N_INSTANCE_OWNER_EMAIL: ${N8N_OWNER_EMAIL}
+      N8N_INSTANCE_OWNER_PASSWORD_HASH: ${N8N_OWNER_PASSWORD_HASH}
+
+      # plain http behind the office VPN, cookie has to be non-secure
+      N8N_SECURE_COOKIE: 'false'
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+
+      # copied these four out of the upgrade notes to shut the boot warnings up
+      N8N_RUNNERS_TASK_TIMEOUT: "300"
+      N8N_UNVERIFIED_PACKAGES_ENABLED: "false"
+      N8N_COMPRESSION_NODE_MAX_DECOMPRESSED_SIZE_BYTES: "2147483648"
+      N8N_COMPRESSION_NODE_MAX_ZIP_ENTRIES: "5000"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://127.0.0.1:5678/healthz/readiness',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  postgres_data:
+  n8n_data:

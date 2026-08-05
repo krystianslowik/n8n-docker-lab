@@ -1,0 +1,84 @@
+# brightline-payments: n8n (ops-managed)
+#
+# 5678 on this host belongs to the old single-container box that we still
+# haven't decommissioned, so n8n lives on 5610 now. See SUP-5102.
+# Reverse proxy work is still in the backlog (INFRA-388), we go direct for now.
+
+name: docklab-bonus-a
+
+services:
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: '${POSTGRES_PASSWORD}'
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.33.0
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # host:container
+      - "5610:5678"
+      # - "5678:5678"        # how it was before Feb, don't put this back
+    environment:
+      # --- database ---
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: '${POSTGRES_PASSWORD}'
+
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+
+      # --- login comes from env, this instance has no signup wizard ---
+      N8N_INSTANCE_OWNER_MANAGED_BY_ENV: "true"
+      N8N_INSTANCE_OWNER_EMAIL: ${N8N_OWNER_EMAIL}
+      N8N_INSTANCE_OWNER_PASSWORD_HASH: ${N8N_OWNER_PASSWORD_HASH}
+
+      # --- how we are addressed ---
+      # added for SUP-5102 so the links n8n hands out point back at us
+      N8N_HOST: localhost
+      N8N_PROTOCOL: http
+      # N8N_TEMPLATES_ENABLED: "false"     # TODO(2026-02) ops wanted this off, never signed off
+
+      # --- plain http on the internal network ---
+      N8N_SECURE_COOKIE: "false"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+
+      # these four are only here to keep the deprecation block off the boot log
+      N8N_RUNNERS_TASK_TIMEOUT: "300"
+      N8N_UNVERIFIED_PACKAGES_ENABLED: "false"
+      N8N_COMPRESSION_NODE_MAX_DECOMPRESSED_SIZE_BYTES: "2147483648"
+      N8N_COMPRESSION_NODE_MAX_ZIP_ENTRIES: "5000"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://127.0.0.1:5678/healthz/readiness',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  postgres_data:
+  n8n_data:

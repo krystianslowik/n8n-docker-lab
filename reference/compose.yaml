@@ -1,0 +1,108 @@
+# Reference stack: the known-good n8n + PostgreSQL Compose project.
+#
+# This is the file every broken case should be diffed against:
+#   diff reference/compose.yaml cases/01-cannot-reach-database/compose.yaml
+#
+# Nothing here is broken. If this stack does not come up on your laptop,
+# the problem is your Docker install, not the lab.
+
+name: docklab-reference
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # pg_isready is the real readiness signal. "container started" is not.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.33.0
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        # Plain `depends_on: [postgres]` waits only for the container to have
+        # STARTED. This waits for it to be READY. That difference is a whole
+        # class of support ticket.
+        condition: service_healthy
+    ports:
+      # host:container. The container always listens on 5678; only the left
+      # side is yours to choose. Reference owns 5678; the cases own 5601-5605
+      # and 5610-5611.
+      - "5678:5678"
+    environment:
+      # --- database ---------------------------------------------------------
+      # DB_TYPE must be exactly "postgresdb". "postgres" is not a valid value.
+      DB_TYPE: postgresdb
+      # "postgres" here is the SERVICE NAME, resolved by Compose's built-in
+      # DNS on the project network. Never "localhost", inside a container
+      # localhost is that container itself.
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+
+      # --- encryption -------------------------------------------------------
+      # Pinned explicitly so it survives a redeploy. If you leave this unset,
+      # n8n generates one into the volume, and losing the volume loses every
+      # credential in the database.
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+
+      # --- pre-provisioned owner (no setup wizard) --------------------------
+      N8N_INSTANCE_OWNER_MANAGED_BY_ENV: "true"
+      N8N_INSTANCE_OWNER_EMAIL: ${N8N_OWNER_EMAIL}
+      # Must be a bcrypt hash, never a plaintext password. A plaintext value
+      # here is rejected at boot with an InstanceBootstrappingError.
+      N8N_INSTANCE_OWNER_PASSWORD_HASH: ${N8N_OWNER_PASSWORD_HASH}
+
+      # --- lab hygiene ------------------------------------------------------
+      # Defaults to true; over plain HTTP on anything but localhost the
+      # browser silently drops the auth cookie and login just fails.
+      N8N_SECURE_COOKIE: "false"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+
+      # --- silence the deprecation block ------------------------------------
+      # These four warn when UNSET. The values below are today's defaults, so
+      # setting them changes behaviour not at all and removes four warning
+      # lines from every boot. Note there is deliberately no
+      # N8N_RUNNERS_ENABLED here: that field was removed in 2.x and setting it
+      # earns you a "Remove this environment variable" deprecation.
+      N8N_RUNNERS_TASK_TIMEOUT: "300"
+      N8N_UNVERIFIED_PACKAGES_ENABLED: "false"
+      N8N_COMPRESSION_NODE_MAX_DECOMPRESSED_SIZE_BYTES: "2147483648"
+      N8N_COMPRESSION_NODE_MAX_ZIP_ENTRIES: "5000"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    healthcheck:
+      # /healthz/readiness, never /healthz. /healthz returns 200
+      # unconditionally and deliberately ignores the database, so a check
+      # built on it reports green with a dead DB.
+      #
+      # Invoked through `node`, which is guaranteed present in this image
+      # and needs no shell. (`wget` is present here too and works, but
+      # `curl` is NOT. See CHEATSHEET.md for the full tool inventory.)
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://127.0.0.1:5678/healthz/readiness',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  postgres_data:
+  n8n_data:

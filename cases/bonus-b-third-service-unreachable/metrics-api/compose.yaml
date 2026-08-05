@@ -1,0 +1,23 @@
+# Internal metrics API.
+#
+# The platform team's real image isn't published yet, so for now this is an
+# nginx stub serving the canned payload from their spec. Workflows in n8n hit
+# it at http://metrics-api/ and treat any 200 as "endpoint alive".
+#
+# Lives in its own folder because ops asked us to keep it out of the n8n
+# stack's lifecycle: we redeploy n8n far more often than this thing.
+# TODO(jm, 2026-01-30): swap to the real image once platform tags a release
+
+name: docklab-bonus-b-metrics
+
+services:
+  metrics-api:
+    image: nginx:alpine
+    restart: unless-stopped
+    # ports:
+    #   - "8080:80"    # uncomment when you need to poke it from your laptop
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5

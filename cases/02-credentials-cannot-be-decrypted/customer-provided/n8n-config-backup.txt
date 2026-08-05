@@ -1,0 +1,26 @@
+Attachment to SUP-4602. Pasted into the ticket by it@acme-interiors.example on
+2026-08-03, in reply to "can you send us anything you still have from the old
+host?"
+
+------------------------------------------------------------------------------
+> This is everything that was in n8n's own data directory on the old VM. We
+> pulled it off the box before we decommissioned it. There is barely anything
+> in there and none of it looks important, so I don't know if it helps.
+
+$ ls -la /home/node/.n8n
+total 28
+drwxr-xr-x    1 node     node          4096 Feb 11 09:41 .
+drwxr-xr-x    1 node     node          4096 Feb 11 09:41 ..
+-rw-------    1 node     node            56 Feb 11 09:41 config
+-rw-r--r--    1 node     node             0 Jul 27 22:14 crash.journal
+-rw-r--r--    1 node     node          1483 Jul 27 22:14 n8nEventLog.log
+drwxr-xr-x    2 node     node          4096 Feb 11 09:41 nodes
+drwxr-xr-x    2 node     node          4096 Feb 11 09:41 storage
+
+$ cat /home/node/.n8n/config
+{
+	"encryptionKey": "a1b2c3d4e5f60718293a4b5c6d7e8f90"
+}
+
+> nodes/ and storage/ were both empty. I didn't bother copying the log file.
+------------------------------------------------------------------------------

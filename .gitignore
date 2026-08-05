@@ -1,0 +1,10 @@
+docs/
+facilitator/
+
+cases/*/HINT-*.txt
+cases/*/FIX.zip
+
+.DS_Store
+._*
+Thumbs.db
+desktop.ini
