@@ -1,0 +1,5 @@
+Nothing is broken: the process is listening, the mapping forwards, and the app
+answers on the port you were given. What is wrong is a piece of information the
+application simply does not have. A published port is an arrangement Docker makes
+on the host side, so ask which half of that arrangement the process inside the
+container is ever told about, and how it would ever learn the other half.

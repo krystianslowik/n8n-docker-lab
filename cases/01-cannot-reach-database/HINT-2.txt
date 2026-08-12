@@ -1,0 +1,4 @@
+The database is fine and the network between the two containers is fine. n8n is
+dialling exactly the address it was told to dial, and getting an honest answer
+from whoever lives at that address. So the disagreement is between what you
+believe n8n was configured with and what it was actually configured with.

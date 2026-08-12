@@ -1,0 +1,4 @@
+Print the configuration Compose actually resolved for both services and put the
+two halves of that credential next to each other. Compare them character by
+character rather than by eye, three people have already read it and agreed it
+looks right.

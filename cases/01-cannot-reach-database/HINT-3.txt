@@ -1,0 +1,4 @@
+You cannot exec into a container that has already exited, so stop trying to ask
+the process and ask Compose instead: have it print the fully resolved
+configuration, everything merged and every variable substituted, and read the
+database connection settings one line at a time.

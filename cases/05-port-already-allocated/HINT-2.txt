@@ -1,0 +1,4 @@
+The error is about a resource the host can only hand to one taker at a time,
+and the customer is right that no ordinary program on the machine has it.
+
+So ask Docker who is holding it, rather than asking the operating system.

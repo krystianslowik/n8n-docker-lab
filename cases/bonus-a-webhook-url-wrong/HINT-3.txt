@@ -1,0 +1,4 @@
+Have Compose print the fully resolved configuration for this project, then read
+two blocks of the n8n service side by side: its whole environment, line by line,
+and its port mapping. Everything the process knows about itself is in the first
+block. The number the outside world actually uses appears only in the second.

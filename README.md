@@ -117,11 +117,11 @@ in the output, not `Started`.
 
 1. **Every case works the same way**: `./setup.sh`, then `./verify.sh`. Don't read
    `setup.sh`.
-2. **`HINT-1.txt` is in every case directory. Don't open it for the first five
-   minutes.** Sit with the symptom first. `HINT-2.txt`, `HINT-3.txt` and the answer
-   key arrive during the session, so if you are stuck past hint 1, say so and you
-   will get the next one. No hint contains a fix, a filename, or a value; the most any
-   of them does is name what to look at.
+2. **All three hints are in every case directory. Don't open hint 1 for the first five
+   minutes.** Sit with the symptom first, then work through them in order: read one, go
+   and try it, come back before opening the next. No hint contains a fix, a filename, or
+   a value; the most any of them does is name what to look at. The answer key comes at
+   the end of the session.
 3. **You must be able to name the one command that cracked it.** This is the whole
    session. The facilitator writes each group's cracking command on the board during
    report-backs, so the room assembles the toolkit collectively.
@@ -273,12 +273,13 @@ Each case directory holds the same five files, so a group that finishes early ca
 pick up a bonus case with zero re-orientation:
 
 ```
-setup.sh   SYMPTOM.md   compose.yaml   .env   verify.sh   HINT-1.txt
+setup.sh   SYMPTOM.md   compose.yaml   .env   verify.sh
+HINT-1.txt   HINT-2.txt   HINT-3.txt
 ```
 
-`HINT-2.txt`, `HINT-3.txt` and a password-protected `FIX.zip` arrive during the
-session. They are held back on purpose: an hour of poking at this is worth more than
-an hour with the answers sitting in the same directory.
+A password-protected `FIX.zip` per case arrives at the end of the session, with the
+full diagnostic path, the root cause, the exact fix, and how the same bug turns up in
+real tickets.
 
 (Case 02 and bonus-b each carry one extra directory the ticket needs: an attachment
 the customer sent, and a second Compose project. You will find out why.)

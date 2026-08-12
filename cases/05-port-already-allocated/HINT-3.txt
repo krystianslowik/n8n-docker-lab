@@ -1,0 +1,4 @@
+Print the configuration Compose actually resolved for this project, and read it
+service by service, looking only at what each service publishes to the host.
+
+Then count the published host ports, and count the distinct ones.

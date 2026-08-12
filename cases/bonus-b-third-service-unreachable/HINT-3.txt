@@ -1,0 +1,3 @@
+Docker will list its networks for you, and inspecting one tells you exactly which
+containers are attached to it. Do that for each network this lab created, then
+compare the attachment lists.

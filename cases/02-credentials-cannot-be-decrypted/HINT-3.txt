@@ -1,0 +1,4 @@
+Print the configuration Compose actually resolved, put the two services side by
+side, and compare what each of them persists outside its own container. Then go
+back through everything the customer attached to the ticket and read it as
+evidence rather than as noise.

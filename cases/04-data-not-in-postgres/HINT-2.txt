@@ -1,0 +1,4 @@
+Both containers are up, but only one of them is doing any work, nothing has
+connected to the other since it started, and you can prove that from inside either
+one. So the question is not whether the database is healthy; it is whether the
+application is talking to it at all, and where it is putting things instead.

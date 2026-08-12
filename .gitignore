@@ -1,9 +1,7 @@
 docs/
 facilitator/
 
-cases/*/HINT-2.txt
-cases/*/HINT-3.txt
-cases/*/FIX.zip
+cases/*/FIX*.zip
 
 .DS_Store
 ._*

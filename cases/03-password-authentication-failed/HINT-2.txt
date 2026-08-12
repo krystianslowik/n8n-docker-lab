@@ -1,0 +1,3 @@
+Nobody's network is broken and nothing is down: one side is offering a credential
+and the other side is refusing it. The two services disagree about something they
+have to agree on. Work out what each of them actually believes.

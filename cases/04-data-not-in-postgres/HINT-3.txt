@@ -1,0 +1,6 @@
+Stop reading the file and ask Compose to print the fully resolved configuration:
+every value substituted, exactly as it is handed to the container, then diff that
+against the same output from the known-good stack you booted at the start of the
+session. Read the database settings one character at a time: a setting can be
+present, spelled almost right, and still not be the setting the process ended up
+running with.

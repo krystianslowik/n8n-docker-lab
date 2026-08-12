@@ -1,0 +1,5 @@
+Anything created today works; only what already existed before the redeploy is
+unreadable. So neither the app nor the rows are broken, what moved is something
+the app needs in order to make sense of those rows. Of the two services here,
+which one kept its state across the redeploy, and which one started from
+nothing?
