@@ -1,0 +1,4 @@
+Nothing here is red, so the bottom rungs of the ladder will all report green and
+tell you nothing. Read the n8n container's log, but read it from the very first
+line, not from the tail, because a clean boot puts the only interesting line
+before the banner everybody scrolls to.

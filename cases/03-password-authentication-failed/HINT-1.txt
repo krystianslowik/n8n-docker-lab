@@ -1,0 +1,2 @@
+The customer quoted you a line from one container's log. There are two containers
+in this stack, and both of them have something to say about this. Read both.

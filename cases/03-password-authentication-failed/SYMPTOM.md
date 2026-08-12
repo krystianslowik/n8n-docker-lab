@@ -48,8 +48,8 @@ If you tie yourself in knots, reset to the shipped broken state with:
 docker compose down -v && ./setup.sh
 ```
 
-Hints land in this directory before the session (`HINT-1.txt` through `HINT-3.txt`).
-Until then it is you, the logs, and `./verify.sh`.
+`HINT-1.txt` is here if you need it. Give the symptom five minutes of your own
+first. Hints 2 and 3 come from the facilitator during the session.
 
 ---
 

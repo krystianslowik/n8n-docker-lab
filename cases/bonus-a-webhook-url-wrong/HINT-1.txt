@@ -1,0 +1,5 @@
+Nothing has crashed here, so skip the "is it running" reflex and go straight to
+"what does it say": read this container's boot log from the top, not just the
+tail. Somewhere in there the application announces, in its own words, the address
+it believes it is reachable at, and it is not the address you type into your
+browser.

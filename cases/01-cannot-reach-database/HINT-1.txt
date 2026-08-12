@@ -1,0 +1,5 @@
+Start at the bottom of the ladder before you theorise: find out what state each
+container is actually in right now, then read BOTH containers' logs, not just the
+one that is complaining. "Up", "restarting" and "gone" are three different
+problems, and one of those two logs is going to be far more boring than you
+expect, which is itself a finding.

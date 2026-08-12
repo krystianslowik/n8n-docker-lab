@@ -1,0 +1,5 @@
+Don't go digging through logs. The thing that failed never started, so it has
+nothing to say, and the two services that did start are perfectly happy.
+
+Reach instead for the command that lists every container in this project,
+including the ones that are not running.

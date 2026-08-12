@@ -1,0 +1,4 @@
+The boot log really is clean, which is why the customer believes there is
+nothing in it. Follow n8n's logs live while you click into that credential in
+the UI, some lines are only written at the moment something actually asks for
+the data.
