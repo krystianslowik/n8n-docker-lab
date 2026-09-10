@@ -1,0 +1,7 @@
+# Runtime state written by the lab scripts
+incidents/.state/
+env/before-reset/
+tools/last-rehearsal.log
+
+# Build output of tools/build-site.sh
+site-dist/

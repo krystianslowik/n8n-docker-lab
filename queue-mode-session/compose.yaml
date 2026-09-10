@@ -1,0 +1,185 @@
+# Queue-mode lab: the known-good n8n deployment the three incidents break.
+#
+#   n8n-main       receives webhooks, serves the UI, puts production work on the queue
+#   n8n-worker     takes jobs off the queue and runs them (2 replicas by default)
+#   redis          the Bull queue, plus pub/sub between main and workers
+#   postgres       workflows, credentials, and every execution record
+#   fulfilment-api the downstream service the workflow calls, with a fixed capacity
+#   console        the incident console webpage, reads Redis, Postgres and the API live
+#
+# Settings that main and workers must agree on live in two files on purpose:
+# env/main.env and env/worker.env. That is how most customer deployments drift,
+# and it is what the incidents exploit. env/baseline/ holds the known-good copies
+# that ./reset.sh restores.
+#
+# Compose precedence note: a key in `environment:` beats the same key in
+# `env_file:`. The role files only hold keys that never appear in the anchor.
+
+name: qmlab
+
+x-n8n-common: &n8n-common
+  image: docker.n8n.io/n8nio/n8n:2.33.0
+  restart: unless-stopped
+  environment: &n8n-common-env
+    DB_TYPE: postgresdb
+    DB_POSTGRESDB_HOST: postgres
+    DB_POSTGRESDB_PORT: 5432
+    DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+    DB_POSTGRESDB_USER: ${POSTGRES_USER}
+    DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+    EXECUTIONS_MODE: queue
+    QUEUE_BULL_REDIS_HOST: redis
+    QUEUE_BULL_REDIS_PORT: 6379
+    N8N_SECURE_COOKIE: "false"
+    N8N_DIAGNOSTICS_ENABLED: "false"
+    N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+    N8N_PERSONALIZATION_ENABLED: "false"
+    GENERIC_TIMEZONE: UTC
+    TZ: UTC
+    # Same deprecation-silencing set as ../reference/compose.yaml. Today's
+    # defaults, set explicitly so the boot log stays readable. There is
+    # deliberately NO OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS here: leaving it
+    # unset is the customer's configuration, and its warning is evidence.
+    N8N_RUNNERS_TASK_TIMEOUT: "300"
+    N8N_UNVERIFIED_PACKAGES_ENABLED: "false"
+    N8N_COMPRESSION_NODE_MAX_DECOMPRESSED_SIZE_BYTES: "2147483648"
+    N8N_COMPRESSION_NODE_MAX_ZIP_ENTRIES: "5000"
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7.4.11-alpine
+    restart: unless-stopped
+    # No persistence: queue state lives exactly as long as the container. A
+    # reset that recreates redis therefore also clears stranded jobs.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      # PONG proves the server answers. It proves nothing about which logical
+      # database or key prefix anyone is using. Incident two is about that gap.
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  n8n-main:
+    <<: *n8n-common
+    env_file: env/main.env
+    environment:
+      <<: *n8n-common-env
+      N8N_INSTANCE_OWNER_MANAGED_BY_ENV: "true"
+      N8N_INSTANCE_OWNER_EMAIL: ${N8N_OWNER_EMAIL}
+      N8N_INSTANCE_OWNER_PASSWORD_HASH: ${N8N_OWNER_PASSWORD_HASH}
+      N8N_WEBHOOK_URL: http://localhost:${MAIN_PORT:-5690}/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${MAIN_PORT:-5690}:5678"
+    volumes:
+      - n8n_main_data:/home/node/.n8n
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://127.0.0.1:5678/healthz/readiness',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 30s
+
+  n8n-worker:
+    <<: *n8n-common
+    # --concurrency is only the fallback. If N8N_CONCURRENCY_PRODUCTION_LIMIT is
+    # set to anything other than -1, the worker uses that and ignores this flag.
+    # The worker prints the value it actually used at startup ("Concurrency: N").
+    command: ["worker", "--concurrency=${WORKER_CONCURRENCY_FLAG:-5}"]
+    env_file: env/worker.env
+    environment:
+      <<: *n8n-common-env
+      QUEUE_HEALTH_CHECK_ACTIVE: "true"
+    deploy:
+      replicas: ${WORKER_REPLICAS:-2}
+    depends_on:
+      n8n-main:
+        condition: service_healthy
+    # Workers deliberately have no volume. With no config file on disk, a
+    # worker accepts whatever N8N_ENCRYPTION_KEY it is given without complaint.
+    healthcheck:
+      # Worker readiness checks its Postgres and Redis connections. Green here
+      # means "can reach its dependencies", not "is consuming main's queue".
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://127.0.0.1:5678/healthz/readiness',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
+
+  fulfilment-api:
+    # Reuses the n8n image for its Node runtime so the lab pulls nothing extra.
+    image: docker.n8n.io/n8nio/n8n:2.33.0
+    restart: unless-stopped
+    entrypoint: ["node", "/srv/fulfilment-api/server.js"]
+    environment:
+      API_KEY: ${FULFILMENT_API_KEY}
+      CAPACITY: ${FULFILMENT_CAPACITY:-10}
+      LATENCY_MS: ${FULFILMENT_LATENCY_MS:-300}
+    volumes:
+      - ./fulfilment-api:/srv/fulfilment-api:ro
+    ports:
+      - "${FULFILMENT_PORT:-5692}:8080"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://127.0.0.1:8080/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  console:
+    image: docker.n8n.io/n8nio/n8n:2.33.0
+    restart: unless-stopped
+    entrypoint: ["node", "/srv/console/server.js"]
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      REDIS_HOST: redis
+      FULFILMENT_URL: http://fulfilment-api:8080
+    volumes:
+      - ./console:/srv/console:ro
+      - ./assets:/srv/assets:ro
+    ports:
+      - "${CONSOLE_PORT:-5691}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  n8n_main_data:
