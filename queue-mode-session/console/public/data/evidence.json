@@ -1,0 +1,181 @@
+{
+ "captured_at": "2026-09-30T09:18:38+00:00",
+ "n8n_version": "2.33.0",
+ "memory_mib_5_workers": "3306",
+ "items": {
+  "baseline.verify": {
+   "title": "./verify.sh on a fresh ./setup.sh",
+   "command": "./verify.sh",
+   "output": "\nContainers (what docker compose ps can tell you)\n  \u2713 postgres: 1 running/healthy\n  \u2713 redis: 1 running/healthy\n  \u2713 fulfilment-api: 1 running/healthy\n  \u2713 n8n-main: 1 running/healthy\n  \u2713 n8n-worker: 2 running/healthy\n  \u2713 console: 1 running/\n\nProduction path: POST /webhook/orders\n  \u2713 webhook answered 200\n  \u2713 execution 3 finished: success\n  \u2713 a worker logged 'Worker started execution 3', so the queue delivered it\n\nManual path: what clicking Execute workflow sends\n  \u2713 manual execution 4 finished: success\n  \u00b7 no worker logged execution 4: main ran it itself (manual offloading is off)\n\nDownstream: did fulfilment-api receive the work?\n  \u2713 fulfilment-api received a production request\n  \u2713 fulfilment-api received a manual (test) request\n\nPASS: queue-mode baseline works end to end.\n      n8n editor   http://localhost:5690  (owner@example.com / DockerLab2026)\n      console      http://localhost:5691"
+  },
+  "final.reset": {
+   "title": "./reset.sh",
+   "command": "./reset.sh",
+   "output": "\nRestoring baseline configuration\n  \u2713 restored .env (your version is in env/before-reset/lab.env)\n  \u2713 env/main.env already matches the baseline\n  \u2713 restored env/worker.env (your version is in env/before-reset/worker.env)\n\nRecreating services (Redis first, so the queue starts empty)\n  \u2713 n8n-main and 2 worker(s) healthy, Redis queue empty, fulfilment-api counters cleared\n\n\nContainers (what docker compose ps can tell you)\n  \u2713 postgres: 1 running/healthy\n  \u2713 redis: 1 running/healthy\n  \u2713 fulfilment-api: 1 running/healthy\n  \u2713 n8n-main: 1 running/healthy\n  \u2713 n8n-worker: 2 running/healthy\n  \u2713 console: 1 running/\n\nProduction path: POST /webhook/orders\n  \u2713 webhook answered 200\n  \u2713 execution 438 finished: success\n  \u2713 a worker logged 'Worker started execution 438', so the queue delivered it\n\nManual path: what clicking Execute workflow sends\n  \u2713 manual execution 439 finished: success\n  \u00b7 no worker logged execution 439: main ran it itself (manual offloading is off)\n\nDownstream: did fulfilment-api receive the work?\n  \u2713 fulfilment-api received a production request\n  \u2713 fulfilment-api received a manual (test) request\n\nPASS: queue-mode baseline works end to end.\n      n8n editor   http://localhost:5690  (owner@example.com / DockerLab2026)\n      console      http://localhost:5691"
+  },
+  "inc1.config": {
+   "title": "Key hashes differ between main and workers",
+   "command": "./tools/evidence.sh config",
+   "output": "\neffective settings inside each running container  (source: the container's environment)\n  \u00b7 keys are shown as a sha256 prefix: compare them without printing secrets\n  container            REDIS_DB   PREFIX     KEY_SHA256     CONC_LIMIT   command\n  n8n-main-1           0          bull       427dbd625cec   unset        start (image default)\n  n8n-worker-1         0          bull       eb215f63085a   unset        worker --concurrency=5 \n  n8n-worker-2         0          bull       eb215f63085a   unset        worker --concurrency=5 \n\n$ docker compose exec n8n-main printenv QUEUE_BULL_REDIS_DB   # and: --index 2 n8n-worker"
+  },
+  "inc1.executions": {
+   "title": "Three manual tests succeeded and four shop orders failed",
+   "command": "./tools/evidence.sh executions",
+   "output": "\nexecutions  (source: Postgres, table execution_entity)\n\n$ psql: last 12 executions with queue wait and run time\n id  |  mode   | status  | created  | queue_wait_s | run_s | retry_of \n-----+---------+---------+----------+--------------+-------+----------\n 113 | webhook | error   | 09:14:19 |         0.20 |  2.01 | \n 112 | webhook | error   | 09:14:19 |         0.19 |  2.03 | \n 111 | webhook | error   | 09:14:19 |         0.01 |  2.24 | \n 110 | webhook | error   | 09:14:19 |         0.02 |  2.25 | \n 109 | manual  | success | 09:14:19 |         0.00 |  0.31 | \n 108 | manual  | success | 09:14:19 |         0.00 |  0.31 | \n 107 | manual  | success | 09:14:19 |         0.01 |  0.32 | \n 106 | webhook | success | 09:14:01 |         2.64 |  0.33 | \n 105 | webhook | success | 09:14:01 |         2.64 |  0.33 | \n 104 | webhook | success | 09:14:01 |         2.64 |  0.33 | \n 103 | webhook | success | 09:14:01 |         2.65 |  0.33 | \n 102 | webhook | success | 09:14:01 |         2.65 |  0.33 | \n(12 rows)"
+  },
+  "inc1.paths": {
+   "title": "What the worker says about a shop order",
+   "command": "docker compose logs n8n-worker | grep -A1 'could not be decrypted'",
+   "output": "n8n-worker-1  | Worker started execution 111 (job 2)\nn8n-worker-1  | Credentials could not be decrypted. The likely reason is that a different \"encryptionKey\" was used to encrypt the data.\nn8n-worker-1  | error:1C800064:Provider routines::bad decrypt\nn8n-worker-1  | Worker started execution 113 (job 4)\nn8n-worker-2  | Discovered 4 cluster checks\nn8n-worker-2  | Worker started execution 110 (job 1)"
+  },
+  "inc1.ps": {
+   "title": "Every container running and healthy",
+   "command": "docker compose ps --format 'table {{.Name}}\\t{{.Status}}'",
+   "output": "NAME                     STATUS\nqmlab-console-1          Up About a minute\nqmlab-fulfilment-api-1   Up About a minute (healthy)\nqmlab-n8n-main-1         Up 12 seconds (healthy)\nqmlab-n8n-worker-1       Up 13 seconds (healthy)\nqmlab-n8n-worker-2       Up 13 seconds (healthy)\nqmlab-postgres-1         Up About a minute (healthy)\nqmlab-redis-1            Up 19 seconds (healthy)"
+  },
+  "inc1.verify": {
+   "title": "Retest on the production path",
+   "command": "./incidents/01-it-works-when-i-click-execute/verify.sh",
+   "output": "\nIncident 01: is the production path fixed?\n  \u2713 every worker is running/healthy\n  \u2713 new production order: execution 116 success\n  \u2713 manual test still works: execution 117 success\n\nPASS: incident 01 solved. Retest used the path that failed: a production webhook."
+  },
+  "inc1.wrongfix": {
+   "title": "Main after being given the workers' key",
+   "command": "docker compose ps n8n-main; docker compose logs n8n-main | grep -m1 Mismatching",
+   "output": "qmlab-n8n-main-1  Restarting (1) 6 seconds ago\nError: Mismatching encryption keys. The encryption key in the settings file /home/node/.n8n/config does not match the N8N_ENCRYPTION_KEY env var. Please make sure both keys match. More information: https://docs.n8n.io/hosting/environment-variables/configuration-methods/#encryption-key"
+  },
+  "inc2.config": {
+   "title": "Main and workers disagree about QUEUE_BULL_REDIS_DB",
+   "command": "./tools/evidence.sh config",
+   "output": "\neffective settings inside each running container  (source: the container's environment)\n  \u00b7 keys are shown as a sha256 prefix: compare them without printing secrets\n  container            REDIS_DB   PREFIX     KEY_SHA256     CONC_LIMIT   command\n  n8n-main-1           1          bull       427dbd625cec   unset        start (image default)\n  n8n-worker-1         0          bull       427dbd625cec   unset        worker --concurrency=5 \n  n8n-worker-2         0          bull       427dbd625cec   unset        worker --concurrency=5 \n\n$ docker compose exec n8n-main printenv QUEUE_BULL_REDIS_DB   # and: --index 2 n8n-worker"
+  },
+  "inc2.executions": {
+   "title": "The five orders stay new and never start",
+   "command": "./tools/evidence.sh executions",
+   "output": "\nexecutions  (source: Postgres, table execution_entity)\n\n$ psql: last 12 executions with queue wait and run time\n id  |  mode   | status  | created  | queue_wait_s | run_s | retry_of \n-----+---------+---------+----------+--------------+-------+----------\n 123 | webhook | new     | 09:15:42 |              |       | \n 122 | webhook | new     | 09:15:42 |              |       | \n 121 | webhook | new     | 09:15:42 |              |       | \n 120 | webhook | new     | 09:15:42 |              |       | \n 119 | webhook | new     | 09:15:42 |              |       | \n 118 | retry   | success | 09:15:23 |         0.01 |  0.51 | 110\n 117 | manual  | success | 09:15:21 |         0.00 |  0.33 | \n 116 | webhook | success | 09:15:20 |         0.11 |  0.55 | \n 115 | manual  | success | 09:14:29 |         0.00 |  0.32 | \n 114 | webhook | error   | 09:14:27 |         0.01 |  2.03 | \n 113 | webhook | error   | 09:14:19 |         0.20 |  2.01 | \n 112 | webhook | error   | 09:14:19 |         0.19 |  2.03 | \n(12 rows)"
+  },
+  "inc2.fixA.executions": {
+   "title": "Recovery A: the five queued orders run once the workers move",
+   "command": "./tools/evidence.sh executions",
+   "output": "\nexecutions  (source: Postgres, table execution_entity)\n\n$ psql: last 12 executions with queue wait and run time\n id  |  mode   | status  | created  | queue_wait_s | run_s | retry_of \n-----+---------+---------+----------+--------------+-------+----------\n 124 | webhook | success | 09:15:49 |        50.56 |  0.53 | \n 123 | webhook | success | 09:15:42 |        56.72 |  0.57 | \n 122 | webhook | success | 09:15:42 |        56.74 |  0.57 | \n 121 | webhook | success | 09:15:42 |        56.77 |  0.57 | \n 120 | webhook | success | 09:15:42 |        56.79 |  0.56 | \n 119 | webhook | success | 09:15:42 |        56.83 |  0.57 | \n 118 | retry   | success | 09:15:23 |         0.01 |  0.51 | 110\n 117 | manual  | success | 09:15:21 |         0.00 |  0.33 | \n 116 | webhook | success | 09:15:20 |         0.11 |  0.55 | \n 115 | manual  | success | 09:14:29 |         0.00 |  0.32 | \n 114 | webhook | error   | 09:14:27 |         0.01 |  2.03 | \n 113 | webhook | error   | 09:14:19 |         0.20 |  2.01 | \n(12 rows)"
+  },
+  "inc2.fixB.executions": {
+   "title": "Recovery B: crashed orders retried with their original payload",
+   "command": "./tools/evidence.sh executions",
+   "output": "\nexecutions  (source: Postgres, table execution_entity)\n\n$ psql: last 12 executions with queue wait and run time\n id  |  mode   | status  | created  | queue_wait_s | run_s | retry_of \n-----+---------+---------+----------+--------------+-------+----------\n 136 | retry   | success | 09:17:33 |         0.01 |  0.31 | 130\n 135 | retry   | success | 09:17:33 |         0.01 |  0.32 | 129\n 134 | retry   | success | 09:17:32 |         0.01 |  0.31 | 128\n 133 | retry   | success | 09:17:32 |         0.02 |  0.55 | 127\n 132 | retry   | success | 09:17:31 |         0.01 |  0.32 | 126\n 131 | webhook | success | 09:17:30 |         0.03 |  0.59 | \n 130 | webhook | crashed | 09:17:05 |              |       | \n 129 | webhook | crashed | 09:17:05 |              |       | \n 128 | webhook | crashed | 09:17:05 |              |       | \n 127 | webhook | crashed | 09:17:05 |              |       | \n 126 | webhook | crashed | 09:17:05 |              |       | \n 125 | webhook | success | 09:16:50 |         0.02 |  0.32 | \n(12 rows)"
+  },
+  "inc2.fixB.mainlog": {
+   "title": "Recovery B: main's startup queue recovery",
+   "command": "docker compose logs n8n-main | grep -iE 'crashed|queue recovery'",
+   "output": "Last session crashed\nMarked executions as `crashed`\nCompleted queue recovery check, recovered dangling executions"
+  },
+  "inc2.mainlog": {
+   "title": "Main enqueued all five, with job numbers starting again at 1",
+   "command": "docker compose logs n8n-main | grep 'Enqueued execution'",
+   "output": "Enqueued execution 119 (job 1)\nEnqueued execution 120 (job 2)\nEnqueued execution 121 (job 3)\nEnqueued execution 122 (job 4)\nEnqueued execution 123 (job 5)"
+  },
+  "inc2.redis": {
+   "title": "Redis answers PONG, the jobs sit in db1, and the workers wait on db0",
+   "command": "./tools/evidence.sh redis",
+   "output": "\nredis  (source: redis-cli inside the redis container)\n\n$ docker compose exec redis redis-cli ping\nPONG\n\n$ docker compose exec redis redis-cli INFO keyspace\n# Keyspace\ndb0:keys=4,expires=3,avg_ttl=41591,subexpiry=0\ndb1:keys=18,expires=7,avg_ttl=2531407,subexpiry=0\n\n$ docker compose exec redis redis-cli -n 0 LLEN bull:jobs:wait   (and :active)\n  db0  waiting=0  active=0\n\n$ docker compose exec redis redis-cli -n 1 LLEN bull:jobs:wait   (and :active)\n  db1  waiting=5  active=0\n\n$ docker compose exec redis redis-cli CLIENT LIST   # who is blocked waiting for jobs, on which db\n  n8n-worker-2 is waiting for jobs on db0\n  n8n-worker-1 is waiting for jobs on db0\n\n$ docker compose exec redis redis-cli PUBSUB CHANNELS 'n8n*'   # pub/sub ignores the db number\nn8n:n8n.commands\nn8n:n8n.worker-response\nn8n:n8n.mcp-relay"
+  },
+  "inc3.concurrency": {
+   "title": "What each worker says at startup",
+   "command": "docker compose logs n8n-worker | grep 'Concurrency:'",
+   "output": "\nconcurrency each worker actually uses  (source: worker startup log)\n\n$ docker compose logs n8n-worker | grep 'Concurrency:'\n  n8n-worker-1  Concurrency: 20\n  n8n-worker-2  Concurrency: 20\n  n8n-worker-3  Concurrency: 20\n  n8n-worker-4  Concurrency: 20\n  n8n-worker-5  Concurrency: 20"
+  },
+  "inc3.config": {
+   "title": "Worker command line and environment side by side",
+   "command": "./tools/evidence.sh config",
+   "output": "\neffective settings inside each running container  (source: the container's environment)\n  \u00b7 keys are shown as a sha256 prefix: compare them without printing secrets\n  container            REDIS_DB   PREFIX     KEY_SHA256     CONC_LIMIT   command\n  n8n-main-1           0          bull       427dbd625cec   unset        start (image default)\n  n8n-worker-1         0          bull       427dbd625cec   20           worker --concurrency=200 \n  n8n-worker-2         0          bull       427dbd625cec   20           worker --concurrency=200 \n  n8n-worker-3         0          bull       427dbd625cec   20           worker --concurrency=200 \n  n8n-worker-4         0          bull       427dbd625cec   20           worker --concurrency=200 \n  n8n-worker-5         0          bull       427dbd625cec   20           worker --concurrency=200 \n\n$ docker compose exec n8n-main printenv QUEUE_BULL_REDIS_DB   # and: --index 2 n8n-worker"
+  },
+  "inc3.downstream": {
+   "title": "The fulfilment API's counters",
+   "command": "./tools/evidence.sh downstream",
+   "output": "\nfulfilment-api  (source: its own /stats endpoint)\n\n$ curl -s http://localhost:5692/stats\n{\"service\":\"fulfilment-api\", \"started_at\":\"2026-09-30T09:13:20.032Z\", \"capacity\":10, \"latency_ms\":300, \"in_flight\":0, \"peak_in_flight\":10, \"accepted\":35, \"rejected_429\":225, \"unauthorized_401\":0, \"by_mode\":{\"production:429\":225, \"production:200\":35}, \"last_10s\":{\"accepted_per_s\":3.5, \"rejected_per_s\":22.5}\n\n$ docker compose logs --tail 5 fulfilment-api\n2026-09-30T09:17:55.674Z POST /orders 200 order=L111752-40 mode=production in_flight=5/10 301ms\n2026-09-30T09:17:55.674Z POST /orders 200 order=L111752-25 mode=production in_flight=4/10 300ms\n2026-09-30T09:17:55.674Z POST /orders 200 order=L111752-5 mode=production in_flight=3/10 300ms\n2026-09-30T09:17:55.674Z POST /orders 200 order=L111752-33 mode=production in_flight=2/10 300ms\n2026-09-30T09:17:55.674Z POST /orders 200 order=L111752-38 mode=production in_flight=1/10 300ms"
+  },
+  "inc3.setup": {
+   "title": "The customer's load test",
+   "command": "./incidents/03-we-added-workers/setup.sh",
+   "output": "\nIncident 03: restoring the baseline first\n\nReplaying the customer's load test\nResult (L111752)\n  executions succeeded                   35 / 100\n  executions failed (error)              65\n  executions crashed / still pending     0 / 0\n  first enqueue to last finish           2.9s\n  successful orders per second           12.1\n  queue wait p50 / p95                   0.16s / 0.42s\n  execution duration p50 / p95           2.05s / 2.42s\n  fulfilment-api accepted (200)          35\n  fulfilment-api refused (429)           225\n  fulfilment-api peak in flight          10 (capacity 10)\nRESULT run=L111752 orders=100 workers=5 success=35 error=65 crashed=0 pending=0 wall_s=2.9 success_per_s=12.1 wait_p50=0.16 wait_p95=0.42 dur_p50=2.05 dur_p95=2.42 api_200=35 api_429=225 api_peak=10\n\n  The ticket is in TICKET.md. Run the same load again any time with:\n    ../../tools/load-test.sh 100 25\n  When you think you've fixed it: ./verify.sh"
+  },
+  "inc3.verify": {
+   "title": "The fix, measured with the same load",
+   "command": "./incidents/03-we-added-workers/verify.sh",
+   "output": "\nIncident 03: effective capacity (from each worker's own startup log)\n  \u00b7 n8n-worker-1 says Concurrency: 2\n  \u00b7 n8n-worker-2 says Concurrency: 2\n  \u00b7 n8n-worker-3 says Concurrency: 2\n  \u00b7 n8n-worker-4 says Concurrency: 2\n  \u00b7 n8n-worker-5 says Concurrency: 2\n  \u00b7 total execution slots: 10, fulfilment-api capacity: 10\n\nLoad test L111813: 100 orders, 25 at a time, 5 worker container(s)\n  \u00b7 webhook answered 200 for 100/100 requests in 0s\n\nResult (L111813)\n  executions succeeded                   100 / 100\n  executions failed (error)              0\n  executions crashed / still pending     0 / 0\n  first enqueue to last finish           3.9s\n  successful orders per second           25.7\n  queue wait p50 / p95                   1.63s / 2.81s\n  execution duration p50 / p95           0.32s / 0.39s\n  fulfilment-api accepted (200)          100\n  fulfilment-api refused (429)           0\n  fulfilment-api peak in flight          10 (capacity 10)\nRESULT run=L111813 orders=100 workers=5 success=100 error=0 crashed=0 pending=0 wall_s=3.9 success_per_s=25.7 wait_p50=1.63 wait_p95=2.81 dur_p50=0.32 dur_p95=0.39 api_200=100 api_429=0 api_peak=10\n\nIncident 03: judged on useful work\n  \u2713 100/100 orders completed\n  \u2713 fulfilment-api refused 0 requests (limit for a pass: 5)\n  \u00b7 successful orders per second: 25.7 (the API tops out near 33/s)\n\nPASS: incident 03 solved. Useful throughput, not worker count, was the measure."
+  },
+  "trace.config": {
+   "title": "Effective settings in each running container",
+   "command": "./tools/evidence.sh config",
+   "output": "\neffective settings inside each running container  (source: the container's environment)\n  \u00b7 keys are shown as a sha256 prefix: compare them without printing secrets\n  container            REDIS_DB   PREFIX     KEY_SHA256     CONC_LIMIT   command\n  n8n-main-1           0          bull       427dbd625cec   unset        start (image default)\n  n8n-worker-1         0          bull       427dbd625cec   unset        worker --concurrency=5 \n  n8n-worker-2         0          bull       427dbd625cec   unset        worker --concurrency=5 \n\n$ docker compose exec n8n-main printenv QUEUE_BULL_REDIS_DB   # and: --index 2 n8n-worker"
+  },
+  "trace.load": {
+   "title": "Baseline load: 2 workers \u00d7 concurrency 5, API capacity 10",
+   "command": "./tools/load-test.sh 100 25",
+   "output": "\nLoad test L111400: 100 orders, 25 at a time, 2 worker container(s)\n  \u00b7 webhook answered 200 for 100/100 requests in 1s\n\nResult (L111400)\n  executions succeeded                   100 / 100\n  executions failed (error)              0\n  executions crashed / still pending     0 / 0\n  first enqueue to last finish           3.5s\n  successful orders per second           28.4\n  queue wait p50 / p95                   1.26s / 2.65s\n  execution duration p50 / p95           0.32s / 0.33s\n  fulfilment-api accepted (200)          100\n  fulfilment-api refused (429)           0\n  fulfilment-api peak in flight          10 (capacity 10)\nRESULT run=L111400 orders=100 workers=2 success=100 error=0 crashed=0 pending=0 wall_s=3.5 success_per_s=28.4 wait_p50=1.26 wait_p95=2.65 dur_p50=0.32 dur_p95=0.33 api_200=100 api_429=0 api_peak=10"
+  },
+  "trace.paths": {
+   "title": "Enqueued by main, started by a worker",
+   "command": "./tools/evidence.sh paths",
+   "output": "\nwhich process ran what  (source: container logs)\n\n$ docker compose logs n8n-main | grep 'Enqueued execution'\nEnqueued execution 1 (job 1)\nEnqueued execution 3 (job 2)\nEnqueued execution 5 (job 3)\n\n$ docker compose logs n8n-worker | grep -E 'Worker (started|finished) execution|could not be decrypted'\nn8n-worker-2  | Worker started execution 3 (job 2)\nn8n-worker-2  | Worker finished execution 3 (job 2)\nn8n-worker-2  | Worker started execution 5 (job 3)\nn8n-worker-2  | Worker finished execution 5 (job 3)\nn8n-worker-1  | Worker started execution 1 (job 1)\nn8n-worker-1  | Worker finished execution 1 (job 1)\n\n$ docker compose logs n8n-main | grep -A1 OFFLOAD_MANUAL\n - OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS -> Running manual executions in the main instance in scaling mode is deprecated. Manual executions will be routed to wor"
+  }
+ },
+ "metrics": {
+  "baseline": {
+   "run": "L111400",
+   "orders": "100",
+   "workers": "2",
+   "success": "100",
+   "error": "0",
+   "crashed": "0",
+   "pending": "0",
+   "wall_s": "3.5",
+   "success_per_s": "28.4",
+   "wait_p50": "1.26",
+   "wait_p95": "2.65",
+   "dur_p50": "0.32",
+   "dur_p95": "0.33",
+   "api_200": "100",
+   "api_429": "0",
+   "api_peak": "10",
+   "concurrency": "5"
+  },
+  "remedy": {
+   "run": "L111813",
+   "orders": "100",
+   "workers": "5",
+   "success": "100",
+   "error": "0",
+   "crashed": "0",
+   "pending": "0",
+   "wall_s": "3.9",
+   "success_per_s": "25.7",
+   "wait_p50": "1.63",
+   "wait_p95": "2.81",
+   "dur_p50": "0.32",
+   "dur_p95": "0.39",
+   "api_200": "100",
+   "api_429": "0",
+   "api_peak": "10",
+   "concurrency": "2"
+  },
+  "incident": {
+   "run": "L111752",
+   "orders": "100",
+   "workers": "5",
+   "success": "35",
+   "error": "65",
+   "crashed": "0",
+   "pending": "0",
+   "wall_s": "2.9",
+   "success_per_s": "12.1",
+   "wait_p50": "0.16",
+   "wait_p95": "0.42",
+   "dur_p50": "2.05",
+   "dur_p95": "2.42",
+   "api_200": "35",
+   "api_429": "225",
+   "api_peak": "10",
+   "concurrency": "20"
+  }
+ }
+}
