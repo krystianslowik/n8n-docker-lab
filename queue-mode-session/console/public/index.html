@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Queue-mode lab</title>
+<meta name="description" content="A self-paced n8n queue-mode troubleshooting lab for support engineers.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#101725">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to the lesson</a>
+<!-- Arrowheads for every copy of the diagram. Kept outside the lesson pages so
+     they stay rendered when the page that holds a diagram is hidden. -->
+<svg class="defs" width="0" height="0" aria-hidden="true" focusable="false"><defs>
+	<marker id="arrow-work" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ff7a5c"/></marker>
+	<marker id="arrow-manual" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#45d3c0"/></marker>
+</defs></svg>
+
+<header class="top">
+	<a class="brand" href="#start">Queue-mode lab</a>
+	<nav class="lessons" aria-label="Lessons">
+		<ol class="seq">
+			<li><a href="#start" data-route="start">Start</a></li>
+			<li><a href="#trace" data-route="trace">Trace an order</a></li>
+			<li><a href="#incident-1" data-route="incident-1">Incident 1</a></li>
+			<li><a href="#incident-2" data-route="incident-2">Incident 2</a></li>
+			<li><a href="#incident-3" data-route="incident-3">Incident 3</a></li>
+		</ol>
+		<ul class="ref">
+			<li><a href="#docker" data-route="docker">Docker</a></li>
+			<li><a href="#checklist" data-route="checklist">Checklist</a></li>
+			<li><a href="#stuck" data-route="stuck">Stuck?</a></li>
+			<li><a href="#notebook" data-route="notebook">Notebook</a></li>
+		</ul>
+	</nav>
+	<button class="live-toggle" id="live-toggle" type="button" aria-controls="live" aria-expanded="false">
+		<span class="dot" id="live-dot" aria-hidden="true"></span><span id="live-word">Live<span class="long"> lab: off</span></span>
+	</button>
+</header>
+
+<main id="main" tabindex="-1">
+
+<!-- ======================================================================= -->
+<section class="page" id="page-start" data-route="start" aria-labelledby="h-start">
+	<div class="hero">
+		<img class="pixel" src="assets/hero.png" width="1774" height="887" fetchpriority="high"
+			alt="Pixel-art operations room at night: rows of server racks with teal lights, an operator's desk, and one amber warning lamp.">
+		<div class="title">
+			<h1 id="h-start">All containers are running. Unfortunately, so is the incident.</h1>
+			<p>A self-paced n8n queue-mode lab for support engineers.</p>
+		</div>
+	</div>
+
+	<p class="question">Where did this execution stop progressing, and what proves it?</p>
+
+	<p>The lab is a queue-mode deployment on your own machine: n8n main, two workers, Redis,
+	Postgres and a small downstream API. You'll work three incidents in which every container
+	stays up and healthy, and find out which process stopped doing its part.</p>
+
+	<p>Do the lessons in order; incident 3 is optional. It takes about two hours. Your answers
+	to the prompts stay in this browser, and the Notebook page downloads them for the follow-up.</p>
+
+	<h2 class="only-lab">Your lab is running</h2>
+	<p class="only-lab"><code>setup.sh</code> has already run. To check the deployment still works end to end:</p>
+	<div class="cmd only-lab">./verify.sh</div>
+
+	<h2 class="only-hosted">Before you start</h2>
+	<table class="only-hosted">
+		<thead><tr><th scope="col">You need</th><th scope="col">Check with</th><th scope="col">Notes</th></tr></thead>
+		<tbody>
+			<tr><td>Docker with Compose v2</td><td><code>docker compose version</code></td><td>The old <code>docker-compose</code> command won't work.</td></tr>
+			<tr><td>4&nbsp;GB of memory for Docker</td><td>Docker Desktop, Settings, Resources</td><td>Incident 3 runs five workers, and the stack used up to 3.3&nbsp;GB in rehearsal.</td></tr>
+			<tr><td>3.5&nbsp;GB of free disk</td><td><code>docker system df</code></td><td>Less if you still have the break/fix lab's n8n and Postgres images.</td></tr>
+			<tr><td>bash, curl, git</td><td><code>bash --version</code></td><td>Tested on macOS and Linux. WSL 2 on Windows should work, but nobody has tried it.</td></tr>
+			<tr><td>Ports 5690–5692 free</td><td><code>lsof -i :5690</code></td><td>The break/fix lab uses different ports, so both labs can run at once.</td></tr>
+		</tbody>
+	</table>
+
+	<h2 class="only-hosted">Quickstart</h2>
+	<div class="cmd multi only-hosted">git clone https://github.com/krystianslowik/n8n-docker-lab.git
+cd n8n-docker-lab/queue-mode-session
+./setup.sh</div>
+	<p class="only-hosted">The first run takes about ten minutes, mostly pulling images, and ends by running <code>./verify.sh</code>.</p>
+
+	<div class="evidence-slot" data-evidence="baseline.verify" data-title="A working setup ends like this"></div>
+
+	<dl class="links">
+		<dt>n8n editor</dt><dd><a href="http://localhost:5690" target="_blank" rel="noopener">localhost:5690</a>, log in as <code>owner@example.com</code> with <code>DockerLab2026</code></dd>
+		<dt class="only-hosted">This page</dt><dd class="only-hosted"><a href="http://localhost:5691" target="_blank" rel="noopener">localhost:5691</a>, served by your lab, with a live panel that reads your Redis and Postgres</dd>
+		<dt>Downstream API</dt><dd><a href="http://localhost:5692/stats" target="_blank" rel="noopener">localhost:5692/stats</a>, the fulfilment API's own counters</dd>
+	</dl>
+
+	<h2>Ground rules</h2>
+	<ul>
+		<li>Before each command, write down what it should show if your hypothesis is right.</li>
+		<li>Change one thing at a time, and retest on the path that failed.</li>
+		<li>Don't read an incident's <code>setup.sh</code>; it contains the answer. Everything else is fair game.</li>
+		<li>Blocks marked Recorded come from a rehearsal run on the author's machine.</li>
+	</ul>
+
+	<label class="checkline"><input type="checkbox" data-check="start.done"> <span>My <code>./setup.sh</code> ended with <code>PASS</code>. <small class="unlock">Unlocks Trace an order.</small></span></label>
+	<nav class="pager" aria-label="Lesson pages"><a class="next" href="#trace"><small>Next</small>Trace one order</a></nav>
+</section>
+
+<!-- ======================================================================= -->
+<section class="page" id="page-trace" data-route="trace" aria-labelledby="h-trace">
+	<h1 id="h-trace">Trace one order through the deployment</h1>
+	<p class="meta">About 20 minutes. Nothing is broken yet.</p>
+	<p>Follow one order from the webhook to the downstream API, and note which process told you each thing.</p>
+
+	<div class="diagram-slot" data-focus=""></div>
+
+	<table>
+		<thead><tr><th scope="col">Service</th><th scope="col">What it does</th><th scope="col">Where its evidence is</th></tr></thead>
+		<tbody>
+			<tr><td><code>n8n-main</code></td><td>Serves the editor and receives webhooks. In queue mode it creates the execution record and puts a job on the queue, which makes it the producer. With manual offloading off, as in this lab, it also runs manual tests itself.</td><td><code>docker compose logs n8n-main</code></td></tr>
+			<tr><td><code>redis</code></td><td>Holds the Bull queue (the <code>bull:jobs:*</code> keys in one logical database) and carries pub/sub messages between main and the workers.</td><td><code>docker compose exec redis redis-cli</code></td></tr>
+			<tr><td><code>n8n-worker</code> (2)</td><td>The consumers. Each one takes jobs off the queue and runs as many executions at once as its concurrency allows.</td><td><code>docker compose logs n8n-worker</code></td></tr>
+			<tr><td><code>postgres</code></td><td>Workflows, encrypted credentials, and every execution record with its status and timestamps. Main and the workers both read and write it.</td><td>the <code>execution_entity</code> table</td></tr>
+			<tr><td><code>fulfilment-api</code></td><td>The downstream service the workflow calls. It works on 10 requests at once and answers the 11th with HTTP 429.</td><td><code>docker compose logs fulfilment-api</code></td></tr>
+		</tbody>
+	</table>
+	<p class="small dim">The workflow, Order intake, has two triggers: a webhook for the shop and a manual trigger for the editor's Execute button. Both feed one HTTP Request node, which authenticates to the fulfilment API with a stored credential and makes up to three attempts, a second apart.</p>
+
+	<p class="where">Run every command from the <code>queue-mode-session</code> directory. Hover any part of a command, or any box or arrow in the diagram, to see what it does.</p>
+
+	<div class="steps">
+	<div class="step"><div class="n" aria-hidden="true">1</div><div class="body">
+		<h2>Send one production order</h2>
+		<div class="cmd">curl -s -X POST localhost:5690/webhook/orders -H 'content-type: application/json' -d '{"order":"TRACE-1"}'</div>
+		<div class="prompt"><label>n8n answered <code>{"message":"Workflow was started"}</code>. What do you know at this point, and what don't you know yet?</label><textarea data-note="trace.webhook-200"></textarea></div>
+	</div></div>
+
+	<div class="step"><div class="n" aria-hidden="true">2</div><div class="body">
+		<h2>Find its execution record in Postgres</h2>
+		<div class="cmd">./tools/evidence.sh executions</div>
+		<p>Queue wait, from <code>createdAt</code> to <code>startedAt</code>, is how long the job waited for a worker. Run time, from <code>startedAt</code> to <code>stoppedAt</code>, is how long the worker spent on it.</p>
+	</div></div>
+
+	<div class="step"><div class="n" aria-hidden="true">3</div><div class="body">
+		<h2>Find who enqueued it and who ran it</h2>
+		<div class="cmd">docker compose logs n8n-main | grep "Enqueued execution"</div>
+		<div class="cmd">docker compose logs n8n-worker | grep "Worker started execution"</div>
+		<p>Match the execution ID from step 2. The line prefix, <code>n8n-worker-1</code> or <code>n8n-worker-2</code>, tells you which replica picked it up.</p>
+		<div class="evidence-slot" data-evidence="trace.paths"></div>
+	</div></div>
+
+	<div class="step"><div class="n" aria-hidden="true">4</div><div class="body">
+		<h2>Now test it the way a customer does</h2>
+		<p>In <a href="http://localhost:5690" target="_blank" rel="noopener">the editor</a>, open Order intake. The bottom button defaults to <strong>Execute workflow from Order webhook</strong>; use its arrow to switch to <strong>from Manual test</strong>, then click it. Repeat steps 2 and 3.</p>
+		<div class="prompt"><label>Before you look: which process will log this execution?</label><textarea data-note="trace.manual-predict"></textarea></div>
+		<div class="cmd">docker compose logs n8n-main | grep -m1 OFFLOAD_MANUAL</div>
+		<div class="prompt"><label>Which process ran the manual test, and what is main's boot log telling you?</label><textarea data-note="trace.manual-found"></textarea></div>
+	</div></div>
+
+	<div class="step"><div class="n" aria-hidden="true">5</div><div class="body">
+		<h2>Check the settings main and the workers must agree on</h2>
+		<p>What each running container actually got, with the encryption key shown as a short hash:</p>
+		<div class="cmd">./tools/evidence.sh config</div>
+		<div class="evidence-slot" data-evidence="trace.config"></div>
+		<p>Main reads <code>env/main.env</code> and the workers read <code>env/worker.env</code>. Lines marked <code>MUST MATCH</code> have to agree.</p>
+	</div></div>
+
+	<div class="step"><div class="n" aria-hidden="true">6</div><div class="body">
+		<h2>Measure concurrency, queue wait and useful throughput</h2>
+		<p>2 workers × concurrency 5 = 10 execution slots, against an API that takes 10 requests at once.</p>
+		<div class="cmd">./tools/load-test.sh 100 25</div>
+		<div class="evidence-slot" data-evidence="trace.load"></div>
+		<div class="prompt"><label>If you added workers, which of these numbers would improve, and which would stay put? Keep this for incident 3.</label><textarea data-note="trace.throughput-predict"></textarea></div>
+	</div></div>
+	</div>
+
+	<h2>Check your picture</h2>
+	<div class="prompt"><label>1. What lives in Redis, and what lives in Postgres?</label><textarea data-note="trace.q2"></textarea></div>
+	<div class="prompt"><label>2. Which settings have to agree across main and the workers?</label><textarea data-note="trace.q3"></textarea></div>
+	<div class="prompt"><label>3. What do "container healthy", "Redis PONG" and "one successful execution" each prove?</label><textarea data-note="trace.q4"></textarea></div>
+
+	<details class="reveal"><summary>Compare with the answers</summary><div class="inner">
+		<ol>
+			<li>Redis holds the queue (waiting and active jobs) and the pub/sub messages. Postgres holds the workflow, the encrypted credential, and the execution records the editor lists. Each job in Redis points at an execution ID in Postgres.</li>
+			<li>At least the database settings, the encryption key (workers decrypt credentials), and where the queue is: Redis host and port, the logical database (<code>QUEUE_BULL_REDIS_DB</code>) and the key prefix (<code>QUEUE_BULL_PREFIX</code>). Workers also need to reach whatever the workflow calls.</li>
+			<li>Healthy means the process is up and its readiness check passed, which for n8n means it can reach its database and Redis. PONG means the Redis server answers. One successful execution means every component that execution used worked, once. None of them tells you anything about a different path.</li>
+		</ol>
+	</div></details>
+
+	<label class="checkline"><input type="checkbox" data-check="trace.done"> <span>I traced one order through Postgres and both logs, and saw a manual test no worker logged. <small class="unlock">Unlocks Incident 1.</small></span></label>
+	<nav class="pager" aria-label="Lesson pages"><a href="#start"><small>Previous</small>Start</a><a class="next" href="#incident-1"><small>Next</small>Incident 1</a></nav>
+</section>
+
+<!-- ======================================================================= -->
+<section class="page" id="page-incident-1" data-route="incident-1" aria-labelledby="h-inc1">
+	<h1 id="h-inc1">Incident 1: "It works when I click Execute"</h1>
+	<p class="meta">About 30 minutes.</p>
+
+	<div class="ticket">
+		<p class="ticket-meta">High priority, set by the customer. Self-hosted Enterprise, queue mode on Docker Compose.</p>
+		<blockquote>
+			<p>Since Tuesday our shop orders are not reaching fulfilment. We have tested the workflow in the editor and it works every time, so queue mode is working and this must be a bug in the webhook node.</p>
+			<p>Follow-up, 40 minutes later: We tested it seventeen times. Please escalate.</p>
+		</blockquote>
+		<p>Recent changes: "Nothing related. Infra rebuilt the worker hosts on Tuesday but that was routine." Attached: a screenshot of a green manual execution.</p>
+	</div>
+
+	<div class="cmd">./incidents/01-it-works-when-i-click-execute/setup.sh</div>
+	<p class="small dim">It replays three manual tests and four shop orders.</p>
+
+	<div class="diagram-slot" data-focus="main worker"></div>
+
+	<div class="steps">
+	<div class="step"><div class="n" aria-hidden="true">1</div><div class="body">
+		<h2>Start from the customer's evidence</h2>
+		<div class="cmd">docker compose ps</div>
+		<div class="prompt"><label>Which processes did the customer's green manual execution touch?</label><textarea data-note="inc1.customer-evidence"></textarea></div>
+	</div></div>
+
+	<div class="step"><div class="n" aria-hidden="true">2</div><div class="body">
+		<h2>Compare a manual execution with a production one</h2>
+		<div class="cmd">./tools/evidence.sh executions</div>
+		<p>Then open Executions in the editor and click into a failed one.</p>
+		<div class="prompt"><label>Your hypothesis in one sentence, and what you'd expect to see if it's wrong</label><textarea data-note="inc1.hypothesis"></textarea></div>
+	</div></div>
+
+	<div class="step"><div class="n" aria-hidden="true">3</div><div class="body">
+		<h2>Ask the process that owns the failing stage</h2>
+		<div class="prompt"><label>What should your next command show if you're right?</label><textarea data-note="inc1.predict"></textarea></div>
+		<details class="hint"><summary>Hint 1</summary><div class="inner"><p>When you traced an order, all the manual tests ran in one process. Which one? And which process runs a shop order?</p></div></details>
+		<details class="hint"><summary>Hint 2</summary><div class="inner"><p>The production executions failed on a worker, so ask the workers:</p>
+			<div class="cmd">docker compose logs n8n-worker | grep -B2 -A2 "Worker started execution"</div></div></details>
+		<details class="hint"><summary>Hint 3</summary><div class="inner"><p>The worker's error names the setting involved. Compare it between main and the workers without printing the secret:</p>
+			<div class="cmd">./tools/evidence.sh config</div></div></details>
+	</div></div>
+
+	<div class="step"><div class="n" aria-hidden="true">4</div><div class="body">
+		<h2>Change one thing, then retest the path that failed</h2>
+		<div class="prompt"><label>What did you change, and why that?</label><textarea data-note="inc1.change"></textarea></div>
+		<div class="cmd">./incidents/01-it-works-when-i-click-execute/verify.sh</div>
+		<p class="small dim">It sends a new production order and a manual test, so moving the problem to main fails it.</p>
+	</div></div>
+	</div>
+
+	<details class="recorded"><summary>Recorded evidence from a rehearsal run</summary><div class="inner">
+		<div class="evidence-slot" data-evidence="inc1.ps"></div>
+		<div class="evidence-slot" data-evidence="inc1.executions"></div>
+		<div class="evidence-slot" data-evidence="inc1.paths"></div>
+		<div class="evidence-slot" data-evidence="inc1.config"></div>
+		<div class="evidence-slot" data-evidence="inc1.verify"></div>
+	</div></details>
+
+	<details class="reveal"><summary>Show the cause and the fix</summary><div class="inner">
+		<h3>Cause</h3>
+		<p>The worker rebuild regenerated <code>env/worker.env</code> from a template, and the template came with a fresh <code>N8N_ENCRYPTION_KEY</code>. Main kept the original key, which is the one the Fulfilment API key credential was encrypted with.</p>
+		<ul>
+			<li>Manual tests run on main, because offloading is off, and main can decrypt the credential. All seventeen tests passed without touching a worker.</li>
+			<li>Shop orders run on the workers, which can't decrypt it:
+				<pre class="log">Credentials could not be decrypted. The likely reason is that a different "encryptionKey" was used to encrypt the data.</pre>
+				The HTTP node tries three times, then the execution fails. No production request reaches the fulfilment API.</li>
+			<li>Every container reports healthy because a worker's readiness check covers its Postgres and Redis connections, and decryption isn't part of it.</li>
+			<li>In <code>./tools/evidence.sh config</code>, the key hash on <code>n8n-main-1</code> differs from the one on every worker.</li>
+		</ul>
+		<h3>Fix</h3>
+		<p>Put main's key into <code>env/worker.env</code> and recreate the workers with <code>docker compose up -d n8n-worker</code>.</p>
+		<h3>The tempting wrong fix</h3>
+		<p>Copying the workers' new key into main. n8n saved the original key in main's volume on first boot, so main refuses to start:</p>
+		<div class="evidence-slot" data-evidence="inc1.wrongfix"></div>
+		<p>The workers have no volume and no saved key to compare against, which is why they started with the wrong one without complaint.</p>
+		<h3>Retest</h3>
+		<p>Repeating the manual test doesn't check this fix, because the manual test never touched the workers. Send a production order and watch it succeed. The four failed shop orders are still <code>error</code> executions; now that the workers can decrypt again, Retry in the Executions list runs them successfully.</p>
+		<p>Setting <code>OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=true</code> makes manual tests run on the workers, so they take the same path as production.</p>
+	</div></details>
+
+	<h2>Reflect</h2>
+	<div class="prompt"><label>Which command told you the answer?</label><textarea data-note="inc1.decisive"></textarea></div>
+	<div class="prompt"><label>Where did you get stuck, or what surprised you?</label><textarea data-note="inc1.stuck"></textarea></div>
+	<p>When you're done, go back to the baseline:</p>
+	<div class="cmd">./reset.sh</div>
+	<label class="checkline"><input type="checkbox" data-check="inc1.done"> <span><code>verify.sh</code> passed for incident 1. <small class="unlock">Unlocks Incident 2.</small></span></label>
+	<nav class="pager" aria-label="Lesson pages"><a href="#trace"><small>Previous</small>Trace an order</a><a class="next" href="#incident-2"><small>Next</small>Incident 2</a></nav>
+</section>
+
+<!-- ======================================================================= -->
+<section class="page" id="page-incident-2" data-route="incident-2" aria-labelledby="h-inc2">
+	<h1 id="h-inc2">Incident 2: "Redis returned PONG"</h1>
+	<p class="meta">About 30 minutes.</p>
+
+	<div class="ticket">
+		<p class="ticket-meta">Urgent. Self-hosted Enterprise, queue mode on Docker Compose.</p>
+		<blockquote>
+			<p>Since this afternoon no workflow executions finish. They appear in the list and never complete. The shop gets HTTP 200 back from the webhook, so n8n is receiving the orders.</p>
+			<p>We can connect to Redis from every container. We ran <code>redis-cli ping</code> in the Redis container and got PONG, and the worker health checks are all green.</p>
+			<p>Follow-up: Redis returned PONG, so we have ruled out Redis. Is this the Bull bug from the forum?</p>
+		</blockquote>
+		<p>Recent changes: "A tidy-up. We gave n8n its own Redis database so the billing app's keys stop mixing with ours (CHG-4471)."</p>
+	</div>
+
+	<div class="cmd">./incidents/02-redis-said-pong/setup.sh</div>
+	<p class="small dim">It sends five shop orders, and <code>verify.sh</code> checks what your fix did to them.</p>
+
+	<div class="diagram-slot" data-focus="redis"></div>
+
+	<div class="steps">
+	<div class="step"><div class="n" aria-hidden="true">1</div><div class="body">
+		<h2>Work out what the customer's evidence covers</h2>
+		<div class="cmd">docker compose exec redis redis-cli ping</div>
+		<div class="prompt"><label>What does PONG tell you about this incident?</label><textarea data-note="inc2.pong"></textarea></div>
+	</div></div>
+
+	<div class="step"><div class="n" aria-hidden="true">2</div><div class="body">
+		<h2>Find where the executions stopped progressing</h2>
+		<div class="cmd">./tools/evidence.sh executions</div>
+		<div class="cmd">docker compose logs n8n-main | grep "Enqueued execution"</div>
+		<div class="cmd">docker compose logs n8n-worker --since 10m | grep "Worker started"</div>
+		<div class="prompt"><label>Your hypothesis in one sentence, and what you'd expect to see if it's wrong</label><textarea data-note="inc2.hypothesis"></textarea></div>
+	</div></div>
+
+	<div class="step"><div class="n" aria-hidden="true">3</div><div class="body">
+		<h2>Compare where main puts work with where the workers look for it</h2>
+		<div class="prompt"><label>What should your next command show if you're right?</label><textarea data-note="inc2.predict"></textarea></div>
+		<details class="hint"><summary>Hint 1</summary><div class="inner"><p>Main says it enqueued the jobs, and the workers never mention them. Where did main put them, and where are the workers waiting?</p></div></details>
+		<details class="hint"><summary>Hint 2</summary><div class="inner"><p>One Redis server has 16 numbered logical databases. <code>INFO keyspace</code> lists the ones holding keys:</p>
+			<div class="cmd">docker compose exec redis redis-cli INFO keyspace</div>
+			<div class="cmd">docker compose exec redis redis-cli -n 0 LLEN bull:jobs:wait</div></div></details>
+		<details class="hint"><summary>Hint 3</summary><div class="inner"><p>Redis knows which database each waiting consumer selected, and each container knows what it was given:</p>
+			<div class="cmd">./tools/evidence.sh redis</div>
+			<div class="cmd">./tools/evidence.sh config</div></div></details>
+	</div></div>
+
+	<div class="step"><div class="n" aria-hidden="true">4</div><div class="body">
+		<h2>Pick which side to change, and predict what happens to the five orders</h2>
+		<p>You can make main and the workers agree from either side, and the two options treat work that's already queued differently.</p>
+		<div class="prompt"><label>Which side will you change, and what will happen to the five queued orders?</label><textarea data-note="inc2.option-predict"></textarea></div>
+		<div class="cmd">./incidents/02-redis-said-pong/verify.sh</div>
+		<p class="small dim">It passes when a new order completes and each of the five orders succeeded or was retried successfully.</p>
+	</div></div>
+	</div>
+
+	<details class="recorded"><summary>Recorded evidence from a rehearsal run</summary><div class="inner">
+		<div class="evidence-slot" data-evidence="inc2.executions"></div>
+		<div class="evidence-slot" data-evidence="inc2.mainlog"></div>
+		<div class="evidence-slot" data-evidence="inc2.redis"></div>
+		<div class="evidence-slot" data-evidence="inc2.config"></div>
+	</div></details>
+
+	<details class="reveal"><summary>Show the cause, both recoveries, and what happened to the five orders</summary><div class="inner">
+		<h3>Cause</h3>
+		<p>CHG-4471 set <code>QUEUE_BULL_REDIS_DB=1</code> in <code>env/main.env</code> and nowhere else. Main enqueues into database 1 and the workers wait on database 0. They share the server, port and password, and read different queues.</p>
+		<ul>
+			<li><code>INFO keyspace</code> shows keys in both <code>db0</code> and <code>db1</code>. <code>LLEN bull:jobs:wait</code> is 5 in db1 and 0 in db0.</li>
+			<li><code>CLIENT LIST</code> shows every worker's <code>brpoplpush</code> connection on <code>db=0</code>.</li>
+			<li>The executions stay <code>new</code> in Postgres, with no <code>startedAt</code>. Main logs <code>Enqueued execution N (job 1)</code>: job numbering restarted at 1, because db1 holds a brand-new queue.</li>
+			<li>Health checks stay green. A worker's readiness check confirms it can reach Redis and doesn't look at which queue it reads.</li>
+			<li>Pub/sub keeps working too. Redis pub/sub ignores the logical database, and n8n names its channels from <code>N8N_REDIS_KEY_PREFIX</code> (<code>n8n:n8n.commands</code> and the others), which the queue settings never change. So main and the workers still exchange messages while no jobs move.</li>
+		</ul>
+		<h3>Recovery A: move the workers to database 1</h3>
+		<p>This matches what the customer wanted. Set <code>QUEUE_BULL_REDIS_DB=1</code> in <code>env/worker.env</code> and run <code>docker compose up -d n8n-worker</code>. The five jobs are still waiting in db1, so the workers pick them up within seconds and they succeed. Their queue wait equals the length of the outage.</p>
+		<div class="evidence-slot" data-evidence="inc2.fixA.executions"></div>
+		<h3>Recovery B: move main back to database 0</h3>
+		<p>New work flows again, and the five jobs stay in db1 with nothing reading them. When main restarts, it runs a queue recovery check: it looks for executions that are <code>new</code> in Postgres but have no job in its own queue, and marks them <code>crashed</code>. The same check runs every <code>N8N_EXECUTIONS_QUEUE_RECOVERY_INTERVAL</code> minutes, 180 by default.</p>
+		<div class="evidence-slot" data-evidence="inc2.fixB.mainlog"></div>
+		<p>You can still recover the orders. Retry on each crashed execution runs it again with its original webhook payload, and in the rehearsal the fulfilment API received the original order references.</p>
+		<div class="evidence-slot" data-evidence="inc2.fixB.executions"></div>
+		<h3>Which recovery is right</h3>
+		<p>The one that matches what the customer meant to do. They wanted DB 1, so recovery A. Recovery B leaves five orphaned jobs in db1. They're harmless; if someone wants them gone, delete those keys rather than running <code>FLUSHDB</code> on a Redis the billing app shares.</p>
+	</div></details>
+
+	<h2>Reflect</h2>
+	<div class="prompt"><label>Which command told you the answer?</label><textarea data-note="inc2.decisive"></textarea></div>
+	<div class="prompt"><label>Where did you get stuck, or what surprised you?</label><textarea data-note="inc2.stuck"></textarea></div>
+	<p>When you're done, go back to the baseline:</p>
+	<div class="cmd">./reset.sh</div>
+	<label class="checkline"><input type="checkbox" data-check="inc2.done"> <span><code>verify.sh</code> passed for incident 2, and I know what my fix did to the five orders. <small class="unlock">Unlocks Incident 3.</small></span></label>
+	<nav class="pager" aria-label="Lesson pages"><a href="#incident-1"><small>Previous</small>Incident 1</a><a class="next" href="#incident-3"><small>Next</small>Incident 3</a></nav>
+</section>
+
+<!-- ======================================================================= -->
+<section class="page" id="page-incident-3" data-route="incident-3" aria-labelledby="h-inc3">
+	<h1 id="h-inc3">Incident 3: "We added workers. The queue got worse."</h1>
+	<p class="meta">Optional. About 25 minutes.</p>
+
+	<div class="ticket">
+		<p class="ticket-meta">High priority. Self-hosted Enterprise, queue mode on Docker Compose.</p>
+		<blockquote>
+			<p>Black Friday is in three weeks, so we load-tested. Orders were failing, so we scaled workers from 2 to 5 and increased concurrency to 200. The dashboard says jobs are picked up faster than ever, but more orders fail than before.</p>
+			<p>Follow-up: We increased concurrency to 200. The errors are now significantly faster.</p>
+		</blockquote>
+		<p>Recent changes: <code>--concurrency=200</code> on the worker command, <code>WORKER_REPLICAS=5</code>, and "a clean-up of the worker env file". Proposed next step: 10 workers.</p>
+	</div>
+
+	<div class="cmd">./incidents/03-we-added-workers/setup.sh</div>
+	<p class="small dim">It applies the customer's changes and runs their 100-order load test.</p>
+
+	<div class="diagram-slot" data-focus="worker api"></div>
+
+	<div class="steps">
+	<div class="step"><div class="n" aria-hidden="true">1</div><div class="body">
+		<h2>Commit to a prediction first</h2>
+		<div class="prompt"><label>If the workers were the bottleneck, which number should improve when you add them? Which should stay the same?</label><textarea data-note="inc3.predict"></textarea></div>
+		<div class="cmd">./tools/load-test.sh 100 25</div>
+		<p>Compare it with your baseline from tracing an order.</p>
+	</div></div>
+
+	<div class="step"><div class="n" aria-hidden="true">2</div><div class="body">
+		<h2>Find the concurrency the workers are actually using</h2>
+		<div class="prompt"><label>How many executions can run at once right now, according to the workers themselves?</label><textarea data-note="inc3.effective"></textarea></div>
+		<details class="hint"><summary>Hint 1</summary><div class="inner"><p>The ticket says 200. Each worker prints the value it uses when it starts:</p>
+			<div class="cmd">docker compose logs n8n-worker | grep "Concurrency:"</div></div></details>
+		<details class="hint"><summary>Hint 2</summary><div class="inner"><p>The command line and the environment disagree. See them side by side:</p>
+			<div class="cmd">./tools/evidence.sh config</div></div></details>
+		<details class="hint"><summary>Hint 3</summary><div class="inner"><p>Now ask the downstream what it went through:</p>
+			<div class="cmd">./tools/evidence.sh downstream</div>
+			<div class="cmd">docker compose logs fulfilment-api | grep -c " 429 "</div></div></details>
+	</div></div>
+
+	<div class="step"><div class="n" aria-hidden="true">3</div><div class="body">
+		<h2>Change one capacity setting, then measure the useful work</h2>
+		<div class="prompt"><label>Your hypothesis, and the one setting you'll change</label><textarea data-note="inc3.hypothesis"></textarea></div>
+		<div class="cmd">./incidents/03-we-added-workers/verify.sh</div>
+		<p class="small dim">It passes on 100/100 completed orders with at most 5 refused by the API. Worker count and queue length are ignored.</p>
+	</div></div>
+	</div>
+
+	<details class="recorded"><summary>Recorded evidence from a rehearsal run</summary><div class="inner">
+		<div class="evidence-slot" data-evidence="inc3.concurrency"></div>
+		<div class="evidence-slot" data-evidence="inc3.config"></div>
+		<div class="evidence-slot" data-evidence="inc3.downstream"></div>
+	</div></details>
+
+	<details class="reveal"><summary>Show the precedence rule, the numbers, and a fix that fits the constraint</summary><div class="inner">
+		<h3>Which concurrency setting wins</h3>
+		<p>On n8n 2.33.0, a worker uses <code>N8N_CONCURRENCY_PRODUCTION_LIMIT</code> whenever it's set to anything other than <code>-1</code>, and falls back to the <code>--concurrency</code> flag (default 10) otherwise. The "clean-up" copied <code>N8N_CONCURRENCY_PRODUCTION_LIMIT=20</code> into <code>env/worker.env</code>, so every worker ignores <code>--concurrency=200</code> and logs <code>Concurrency: 20</code>. The customer's 200 never took effect, and the real total was 5 × 20 = 100 execution slots.</p>
+		<h3>The constraint</h3>
+		<p>The fulfilment API works on 10 requests at a time and answers the 11th with HTTP 429. With 100 slots, most calls get refused. The HTTP node tries each call up to three times, a second apart, so executions take longer and more of them fail. Queue wait did get shorter, because work leaves the queue faster, and queue wait was the number on the customer's dashboard.</p>
+		<div id="inc3-metrics"></div>
+		<h3>Fix</h3>
+		<p>Fit the total number of slots to what the downstream can take. In the rehearsal, five workers with <code>N8N_CONCURRENCY_PRODUCTION_LIMIT=2</code> (5 × 2 = 10) completed all 100 orders with no 429s. Each worker then warns that concurrency below 5 "can lead to an unstable environment", which is a good argument for fewer workers with more slots each. Going back to two workers at concurrency 5 works too. Longer term, ask the downstream owner for their real limit, and add rate limiting or batching instead of workers.</p>
+	</div></details>
+
+	<h2>Reflect</h2>
+	<div class="prompt"><label>Which measurement told you the answer, and which one misled?</label><textarea data-note="inc3.decisive"></textarea></div>
+	<div class="prompt"><label>Where did you get stuck, or what surprised you?</label><textarea data-note="inc3.stuck"></textarea></div>
+	<p>When you're done, go back to the baseline:</p>
+	<div class="cmd">./reset.sh</div>
+	<label class="checkline"><input type="checkbox" data-check="inc3.done"> <span><code>verify.sh</code> passed for incident 3.</span></label>
+	<nav class="pager" aria-label="Lesson pages"><a href="#incident-2"><small>Previous</small>Incident 2</a><a class="next" href="#docker"><small>Next</small>Docker commands</a></nav>
+</section>
+
+<!-- ======================================================================= -->
+<section class="page" id="page-docker" data-route="docker" aria-labelledby="h-docker">
+	<h1 id="h-docker">Docker commands for queue mode</h1>
+	<p>Queue mode splits n8n into several containers, so most questions start with Docker: which containers exist, what each one was given, and what it's doing. Hover any part of a command to see what it does. The outputs come from a running copy of this lab.</p>
+
+	<h2>Which containers are running, and are they healthy?</h2>
+	<div class="cmd">docker compose ps --format &#x27;table {{.Name}}\t{{.Status}}\t{{.Ports}}&#x27;</div>
+	<div class="evidence"><div class="label"><span class="tag">Output</span>from a running copy of this lab</div><pre>NAME                     STATUS                 PORTS
+qmlab-console-1          Up 3 hours             0.0.0.0:5691-&gt;8080/tcp, [::]:5691-&gt;8080/tcp
+qmlab-fulfilment-api-1   Up 3 hours (healthy)   0.0.0.0:5692-&gt;8080/tcp, [::]:5692-&gt;8080/tcp
+qmlab-n8n-main-1         Up 2 hours (healthy)   0.0.0.0:5690-&gt;5678/tcp, [::]:5690-&gt;5678/tcp
+qmlab-n8n-worker-1       Up 2 hours (healthy)   5678/tcp
+qmlab-n8n-worker-2       Up 2 hours (healthy)   5678/tcp
+qmlab-postgres-1         Up 3 hours (healthy)   5432/tcp
+qmlab-redis-1            Up 2 hours (healthy)   6379/tcp</pre></div>
+	<dl class="reading"><dt><code>qmlab-n8n-worker-1</code></dt><dd>Compose names each container after the project, the service and the replica number. Two worker replicas give two containers.</dd><dt>The three columns</dt><dd>Picked with <code>--format</code>. Plain <code>docker compose ps</code> shows these plus the image, the command and when each container was created.</dd><dt><code>Up 2 hours (healthy)</code></dt><dd>Running for two hours, and its last health check passed. The console has no health check, so it shows no (healthy).</dd><dt><code>0.0.0.0:5690-&gt;5678/tcp</code></dt><dd>Port 5690 on your machine forwards to 5678 inside n8n-main. The workers' plain 5678/tcp means the port exists on Docker's network but isn't published to your machine.</dd></dl>
+	<div class="cmd">docker inspect --format &#x27;{{.State.Health.Status}} {{json .Config.Healthcheck.Test}}&#x27; qmlab-n8n-worker-1</div>
+	<div class="evidence"><div class="label"><span class="tag">Output</span>from a running copy of this lab</div><pre>healthy [&quot;CMD&quot;,&quot;node&quot;,&quot;-e&quot;,&quot;require(&#x27;http&#x27;).get(&#x27;http://127.0.0.1:5678/healthz/readiness&#x27;,r=&gt;process.exit(r.statusCode===200?0:1)).on(&#x27;error&#x27;,()=&gt;process.exit(1))&quot;]</pre></div>
+	<dl class="reading"><dt><code>healthy</code></dt><dd>The result of the most recent check.</dd><dt><code>[&quot;CMD&quot;,&quot;node&quot;,&quot;-e&quot;,…]</code></dt><dd>The check itself: an HTTP request to the worker's own /healthz/readiness, which answers 200 once the worker can reach Postgres and Redis. That's everything healthy means here.</dd></dl>
+
+	<h2>Are main and the workers on the same version?</h2>
+	<div class="cmd">docker compose images</div>
+	<div class="evidence"><div class="label"><span class="tag">Output</span>from a running copy of this lab</div><pre>CONTAINER                REPOSITORY                TAG                 PLATFORM            IMAGE ID            SIZE                CREATED
+qmlab-console-1          docker.n8n.io/n8nio/n8n   2.33.0              linux/arm64         fd12b6c51910        379MB               2 months ago
+qmlab-fulfilment-api-1   docker.n8n.io/n8nio/n8n   2.33.0              linux/arm64         fd12b6c51910        379MB               2 months ago
+qmlab-n8n-main-1         docker.n8n.io/n8nio/n8n   2.33.0              linux/arm64         fd12b6c51910        379MB               2 months ago
+qmlab-n8n-worker-1       docker.n8n.io/n8nio/n8n   2.33.0              linux/arm64         fd12b6c51910        379MB               2 months ago
+qmlab-n8n-worker-2       docker.n8n.io/n8nio/n8n   2.33.0              linux/arm64         fd12b6c51910        379MB               2 months ago
+qmlab-postgres-1         postgres                  17-alpine           linux/arm64/v8      b0f9560a2de0        115MB               12 days ago
+qmlab-redis-1            redis                     7.4.11-alpine       linux/arm64/v8      858f009f9709        16.8MB              12 days ago</pre></div>
+	<dl class="reading"><dt><code>2.33.0</code> and <code>fd12b6c51910</code></dt><dd>Main and both workers run the same tag and the same image ID. In queue mode, main and every worker should run the same n8n version.</dd><dt><code>qmlab-console-1</code>, <code>qmlab-fulfilment-api-1</code></dt><dd>These reuse the n8n image for its Node runtime. They aren't n8n processes.</dd><dt><code>linux/arm64</code></dt><dd>This capture came from an Apple Silicon Mac. On an Intel machine it says linux/amd64.</dd></dl>
+
+	<h2>What was a container meant to get, and what did it get?</h2>
+	<div class="cmd">docker compose config n8n-worker | grep EXECUTIONS_MODE</div>
+	<div class="evidence"><div class="label"><span class="tag">Output</span>from a running copy of this lab</div><pre>      EXECUTIONS_MODE: queue
+      EXECUTIONS_MODE: queue
+    EXECUTIONS_MODE: queue</pre></div>
+	<dl class="reading"><dt>Three lines</dt><dd>config prints the service you name and the services it depends on. The first line is n8n-main, which n8n-worker depends on, and the second is n8n-worker itself.</dd><dt>The last one, indented less</dt><dd>The shared x-n8n-common block at the top of compose.yaml, printed as written.</dd><dt><code>queue</code></dt><dd>The setting that turns queue mode on. Main and every worker need it.</dd><dt>All of it</dt><dd>What compose.yaml and the env files say, which is what someone intended to deploy.</dd></dl>
+	<div class="cmd">docker compose exec --index 2 n8n-worker printenv EXECUTIONS_MODE</div>
+	<div class="evidence"><div class="label"><span class="tag">Output</span>from a running copy of this lab</div><pre>queue</pre></div>
+	<dl class="reading"><dt><code>queue</code></dt><dd>The value inside the running n8n-worker-2. A container keeps the environment it was created with, so if this differs from the config output, the container hasn't been recreated since the change.</dd></dl>
+
+	<h2>What is each process doing?</h2>
+	<div class="cmd">docker compose top n8n-worker</div>
+	<div class="evidence"><div class="label"><span class="tag">Output</span>from a running copy of this lab</div><pre>SERVICE     #   UID   PID   PPID  C   STIME  TTY  TIME      CMD
+n8n-worker  1   1000  7117  7072  0   09:58  ?    00:00:00  tini -- /docker-entrypoint.sh worker --concurrency=5
+n8n-worker  1   1000  7193  7117  0   09:58  ?    00:00:23  node /usr/local/bin/n8n worker --concurrency=5
+n8n-worker  1   1000  7341  7193  0   09:58  ?    00:00:11  node --disallow-code-generation-from-strings --disable-proto=delete /usr/local/lib/node_modules/n8n/node_modules/.pnpm/@n8n+task-runner@file+packages+@n8n+task-runner_@opentelemetry+api@1.9.0_@opentelemetry_f4c4f0962cb44afa934cbd57e3ebca8c/node_modules/@n8n/task-runner/dist/start.js
+n8n-worker  2   1000  7143  7106  0   09:58  ?    00:00:00  tini -- /docker-entrypoint.sh worker --concurrency=5
+n8n-worker  2   1000  7199  7143  0   09:58  ?    00:00:22  node /usr/local/bin/n8n worker --concurrency=5
+n8n-worker  2   1000  7348  7199  0   09:58  ?    00:00:11  node --disallow-code-generation-from-strings --disable-proto=delete /usr/local/lib/node_modules/n8n/node_modules/.pnpm/@n8n+task-runner@file+packages+@n8n+task-runner_@opentelemetry+api@1.9.0_@opentelemetry_f4c4f0962cb44afa934cbd57e3ebca8c/node_modules/@n8n/task-runner/dist/start.js</pre></div>
+	<dl class="reading"><dt><code>#</code> column</dt><dd>The replica: 1 or 2.</dd><dt><code>tini -- /docker-entrypoint.sh worker …</code></dt><dd>The container's init process. It starts n8n and passes signals on to it.</dd><dt><code>node /usr/local/bin/n8n worker --concurrency=5</code></dt><dd>The worker itself, with the command-line flags it was started with.</dd><dt><code>node … task-runner/dist/start.js</code></dt><dd>The task runner: a separate process that runs the workflow's JavaScript for this worker.</dd></dl>
+	<div class="cmd">docker compose logs --tail 5 --timestamps n8n-main</div>
+	<div class="evidence"><div class="label"><span class="tag">Output</span>from a running copy of this lab</div><pre>n8n-main-1  | 2026-09-30T09:58:54.833778092Z Execution 450 (job 3) finished
+n8n-main-1  | 2026-09-30T09:58:54.839575259Z Execution 451 (job 4) finished
+n8n-main-1  | 2026-09-30T09:58:54.839710467Z Execution 449 (job 2) finished
+n8n-main-1  | 2026-09-30T09:59:07.911793250Z Enqueued execution 452 (job 5)
+n8n-main-1  | 2026-09-30T09:59:09.972772335Z Execution 452 (job 5) finished</pre></div>
+	<dl class="reading"><dt><code>n8n-main-1  |</code></dt><dd>The container that wrote the line.</dd><dt><code>2026-09-30T09:58:54.83…Z</code></dt><dd>When Docker received the line, in UTC. --timestamps adds it.</dd><dt><code>Enqueued execution 452 (job 5)</code></dt><dd>452 is the execution ID in Postgres, and 5 is the job number in the Bull queue.</dd><dt><code>Execution 452 (job 5) finished</code></dt><dd>Main heard back that a worker finished that job. Finished covers failed executions too; the status is in Postgres.</dd><dt>To keep watching</dt><dd>Add <code>-f</code> to follow new lines as they arrive, and press Ctrl+C to stop.</dd></dl>
+	<div class="cmd">docker stats --no-stream</div>
+	<div class="evidence"><div class="label"><span class="tag">Output</span>from a running copy of this lab</div><pre>CONTAINER ID   NAME                     CPU %     MEM USAGE / LIMIT     MEM %     NET I/O           BLOCK I/O        PIDS
+15249bcceb6a   qmlab-n8n-worker-2       0.89%     288.8MiB / 7.652GiB   3.69%     968kB / 1.68MB    0B / 16.4kB      20
+f08355b1963e   qmlab-n8n-worker-1       1.01%     282.4MiB / 7.652GiB   3.60%     981kB / 1.71MB    131kB / 24.6kB   20
+f45615603a48   qmlab-redis-1            1.57%     10.77MiB / 7.652GiB   0.14%     6.08MB / 30.4MB   0B / 0B          6
+60a8fb782c34   qmlab-n8n-main-1         0.64%     321.8MiB / 7.652GiB   4.11%     4.22MB / 4.56MB   0B / 36.9kB      20
+a8fae9b6f017   qmlab-console-1          0.20%     40.21MiB / 7.652GiB   0.51%     47.7MB / 133MB    0B / 0B          11
+1d4f59e517e7   qmlab-postgres-1         1.56%     50.03MiB / 7.652GiB   0.64%     30.8MB / 48.4MB   32.8kB / 118MB   12
+b7a0d95f9439   qmlab-fulfilment-api-1   0.00%     17.81MiB / 7.652GiB   0.23%     1.75MB / 3.6MB    0B / 0B          7</pre></div>
+	<dl class="reading"><dt><code>MEM USAGE</code></dt><dd>Each idle worker uses about 285 MiB here. Every extra worker adds roughly that before it runs anything.</dd><dt><code>LIMIT</code></dt><dd>The memory Docker has in total. On Docker Desktop, that's the setting under Resources.</dd><dt><code>CPU %</code></dt><dd>Near zero while idle. Without <code>--no-stream</code> it keeps updating, so run it during a load test and watch the workers.</dd></dl>
+
+	<h2>Can a worker find and reach Redis?</h2>
+	<div class="cmd">docker compose exec n8n-worker nslookup redis</div>
+	<div class="evidence"><div class="label"><span class="tag">Output</span>from a running copy of this lab</div><pre>Server:		127.0.0.11
+Address:	127.0.0.11:53
+
+Non-authoritative answer:
+Name:	redis
+Address: 172.20.0.2
+
+Non-authoritative answer:</pre></div>
+	<dl class="reading"><dt><code>Server: 127.0.0.11</code></dt><dd>Docker's built-in DNS, which every container on the project's network uses.</dd><dt><code>Name: redis</code>, <code>Address: 172.20.0.2</code></dt><dd>The service name resolves to the Redis container's address. That's why <code>QUEUE_BULL_REDIS_HOST=redis</code> works without an IP.</dd><dt>Two "Non-authoritative answer" lines</dt><dd>nslookup asks for an IPv4 and an IPv6 address, and only IPv4 has an answer.</dd></dl>
+	<div class="cmd">docker compose exec n8n-worker nc -zv redis 6379</div>
+	<div class="evidence"><div class="label"><span class="tag">Output</span>from a running copy of this lab</div><pre>redis (172.20.0.2:6379) open</pre></div>
+	<dl class="reading"><dt><code>open</code></dt><dd>The port accepts TCP connections. That's all it proves; it says nothing about what happens after the connection opens.</dd></dl>
+
+	<h2>Applying a change</h2>
+	<p>These change the lab, so there's no output here. Run them when a lesson calls for it.</p>
+	<div class="cmd">docker compose up -d n8n-worker</div>
+	<p>Recreates the worker containers if their configuration changed since they were created, and leaves them alone if it didn't. Use it after editing <code>env/worker.env</code> or <code>compose.yaml</code>.</p>
+	<div class="cmd">docker compose restart n8n-worker</div>
+	<p>Stops and starts the same containers. They keep the environment they were created with, so a restart doesn't pick up edits to env files or <code>compose.yaml</code>.</p>
+	<div class="cmd">docker compose up -d --scale n8n-worker=3</div>
+	<p>Runs three worker replicas. The lab normally sets the count with <code>WORKER_REPLICAS</code> in <code>.env</code>, and <code>./reset.sh</code> puts it back to two.</p>
+
+	<nav class="pager" aria-label="Lesson pages"><a href="#incident-3"><small>Previous</small>Incident 3</a><a class="next" href="#checklist"><small>Next</small>Evidence checklist</a></nav>
+</section>
+
+<!-- ======================================================================= -->
+<section class="page" id="page-checklist" data-route="checklist" aria-labelledby="h-check">
+	<h1 id="h-check">Queue-mode evidence checklist</h1>
+	<p>What to ask a customer for at each stage. Ask for the stage that stopped progressing and the one before it.</p>
+	<table>
+		<thead><tr><th scope="col">Stage</th><th scope="col">Ask for</th><th scope="col">Proves</th><th scope="col">Doesn't prove</th></tr></thead>
+		<tbody>
+			<tr><td>Request reached main</td><td>The webhook's HTTP status, main's log, and whether an execution record exists</td><td>Main received it and created an execution</td><td>That anything ran. In "respond immediately" mode, 200 only means accepted.</td></tr>
+			<tr><td>Enqueued</td><td>Main's log line <code>Enqueued execution N (job M)</code></td><td>Main wrote a job to its own queue</td><td>That any worker reads that queue</td></tr>
+			<tr><td>Waiting in the queue</td><td><code>INFO keyspace</code>, <code>LLEN bull:jobs:wait</code> and <code>:active</code> per database, and the key prefix in use</td><td>Where jobs are piling up</td><td>Why nobody takes them</td></tr>
+			<tr><td>Picked up</td><td>The worker's line <code>Worker started execution N</code>, and <code>db=</code> on the <code>brpoplpush</code> connections in <code>CLIENT LIST</code></td><td>Which worker took it, and which database each consumer waits on</td><td>That it finished</td></tr>
+			<tr><td>Executed</td><td>The execution's status and error, from the editor or <code>execution_entity</code>, and the worker's log around that ID</td><td>What failed, in the process where it failed</td><td>How other paths (manual tests, other workers) behave</td></tr>
+			<tr><td>Downstream</td><td>The downstream service's own status codes and timings: 429s, timeouts</td><td>Whether the constraint sits outside n8n</td><td>Capacity, which needs a load comparison</td></tr>
+			<tr><td>Settings agree</td><td>The effective environment of each running process: Redis host, port and database, <code>QUEUE_BULL_PREFIX</code>, a hash of the encryption key (never the key), and concurrency from the worker's startup line</td><td>What each process actually got</td><td>What was intended, which lives in the compose file or Helm values</td></tr>
+			<tr><td>Verified</td><td>A retest on the path that failed, and what happened to work queued during the incident</td><td>The fix</td><td></td></tr>
+		</tbody>
+	</table>
+
+	<h2>Not evidence on its own</h2>
+	<ul>
+		<li>Every container running and healthy. For n8n, readiness only means it can reach its database and Redis.</li>
+		<li><code>redis-cli ping</code> returning PONG.</li>
+		<li>A successful manual execution while <code>OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS</code> isn't <code>true</code>. It ran on main.</li>
+		<li>A webhook answering 200 in "respond immediately" mode.</li>
+		<li>A worker count, a concurrency value in a file, or an empty queue.</li>
+	</ul>
+
+	<h2>Commands in this lab</h2>
+	<table>
+		<tbody>
+			<tr><td><code>./tools/evidence.sh [section]</code></td><td>Read-only evidence, with each underlying command printed. Sections: <code>containers</code>, <code>executions</code>, <code>paths</code>, <code>config</code>, <code>redis</code>, <code>concurrency</code>, <code>downstream</code>.</td></tr>
+			<tr><td><code>./tools/load-test.sh [orders] [parallel]</code></td><td>Sends a burst of production orders, then reports outcomes from Postgres and the fulfilment API.</td></tr>
+			<tr><td><code>./verify.sh</code></td><td>Checks the baseline end to end, on both the production and the manual path.</td></tr>
+			<tr><td><code>incidents/NN-*/verify.sh</code></td><td>Checks whether one incident is solved, by its outcome.</td></tr>
+		</tbody>
+	</table>
+	<nav class="pager" aria-label="Lesson pages"><a href="#docker"><small>Previous</small>Docker commands</a><a class="next" href="#stuck"><small>Next</small>Stuck?</a></nav>
+</section>
+
+<!-- ======================================================================= -->
+<section class="page" id="page-stuck" data-route="stuck" aria-labelledby="h-stuck">
+	<h1 id="h-stuck">Stuck?</h1>
+	<p>Before you reset, write down where you got stuck, for the discussion.</p>
+
+	<h2>Get back to a known-good state</h2>
+	<table>
+		<thead><tr><th scope="col">Command</th><th scope="col">Configuration</th><th scope="col">Redis queue</th><th scope="col">Postgres data</th></tr></thead>
+		<tbody>
+			<tr><td><code>./reset.sh</code></td><td>Restored from <code>env/baseline/</code>; your versions are saved in <code>env/before-reset/</code></td><td>Emptied, because Redis is recreated and keeps nothing</td><td>Kept: workflow, credential, execution history</td></tr>
+			<tr><td><code>./reset.sh --full</code></td><td>Restored</td><td>Emptied</td><td>Deleted and seeded again (it runs <code>./setup.sh</code>)</td></tr>
+			<tr><td><code>./teardown.sh</code></td><td colspan="3">Removes the <code>qmlab</code> project's containers, network and volumes. Images stay cached, and nothing outside the project is touched.</td></tr>
+		</tbody>
+	</table>
+	<p class="small dim"><code>reset.sh</code> leaves <code>compose.yaml</code> alone. If you edited it, <code>git diff compose.yaml</code> shows your changes and <code>git checkout -- compose.yaml</code> undoes them.</p>
+
+	<h2>Common problems</h2>
+	<table>
+		<thead><tr><th scope="col">What you see</th><th scope="col">What to do</th></tr></thead>
+		<tbody>
+			<tr><td><code>Docker is not running</code></td><td>Start Docker Desktop and wait until it reports running. <code>docker info</code> confirms it.</td></tr>
+			<tr><td><code>port is already allocated</code></td><td>Something else holds 5690, 5691 or 5692, and <code>lsof -i :5690</code> finds it. To move the lab, change <code>MAIN_PORT</code>, <code>CONSOLE_PORT</code> or <code>FULFILMENT_PORT</code> in both <code>.env</code> and <code>env/baseline/lab.env</code>.</td></tr>
+			<tr><td>Setup sits at "Starting n8n-main"</td><td>The first boot runs database migrations and takes a minute or two; <code>docker compose logs -f n8n-main</code> shows progress. If main keeps restarting, give Docker more memory.</td></tr>
+			<tr><td>A worker is <code>unhealthy</code> or restarting</td><td>Read <code>docker compose logs --tail=40 n8n-worker</code>, then run <code>./reset.sh</code>.</td></tr>
+			<tr><td>Editor login fails</td><td>Use <code>owner@example.com</code> and <code>DockerLab2026</code> at <code>http://localhost:5690</code>. An IP address instead of <code>localhost</code> can make the browser drop the session cookie.</td></tr>
+			<tr><td><code>verify.sh</code> says "no record of the incident's orders"</td><td>Run that incident's <code>setup.sh</code> first. A reset clears the record.</td></tr>
+			<tr><td>The live panel says "not connected"</td><td>Open <a href="http://localhost:5691">localhost:5691</a>, the copy your lab serves. A hosted copy of this page can only read your machine if your browser allows it, and some browsers don't.</td></tr>
+			<tr><td>Nothing makes sense any more</td><td><code>./reset.sh --full</code> puts everything back in a couple of minutes.</td></tr>
+		</tbody>
+	</table>
+	<nav class="pager" aria-label="Lesson pages"><a href="#checklist"><small>Previous</small>Evidence checklist</a><a class="next" href="#notebook"><small>Next</small>Notebook</a></nav>
+</section>
+
+<!-- ======================================================================= -->
+<section class="page" id="page-notebook" data-route="notebook" aria-labelledby="h-notes">
+	<h1 id="h-notes">Your notebook</h1>
+	<p>Your notes are stored only in this browser. Download them before you switch browsers or clear site data.</p>
+
+	<div class="prompt"><label>Your name, for the download</label><input type="text" data-note="meta.name" autocomplete="name"></div>
+	<div class="prompt"><label>What you ran it on: operating system, Docker version, anything unusual</label><input type="text" data-note="meta.env" autocomplete="off"></div>
+	<div class="prompt"><label>For the discussion: one thing you tried, one thing you found, one place you got stuck</label><textarea data-note="meta.discussion" rows="5"></textarea></div>
+
+	<div class="row">
+		<button class="btn primary" id="export-md" type="button">Download notes as Markdown</button>
+		<button class="btn" id="copy-md" type="button">Copy notes</button>
+		<button class="btn" id="clear-notes" type="button">Delete all notes</button>
+		<span class="small dim" id="export-status" role="status"></span>
+	</div>
+
+	<div class="notes-list" id="notes-list"></div>
+	<nav class="pager" aria-label="Lesson pages"><a href="#stuck"><small>Previous</small>Stuck?</a></nav>
+</section>
+
+</main>
+
+<!-- ======================================================================= -->
+<aside class="live" id="live" aria-labelledby="h-live">
+	<h2 id="h-live">Live lab</h2>
+	<p class="live-source" id="live-source">Not connected.</p>
+	<div class="live-url"><input type="url" id="live-url" aria-label="Address of your lab's state endpoint" autocomplete="off" spellcheck="false"><button class="btn" id="live-connect" type="button">Connect</button></div>
+	<div id="live-body"></div>
+</aside>
+
+<template id="diagram-tpl">
+<svg class="diagram" viewBox="0 0 1100 420" tabindex="0" aria-label="Architecture diagram, use the arrow keys to explain each part. The shop sends webhooks to n8n-main. Main enqueues jobs in Redis. n8n-worker-1 and n8n-worker-2 take jobs from Redis and call fulfilment-api. Main and the workers record executions in Postgres. Manual tests from the editor run on main.">
+	<!-- Every box and arrow explains itself on hover, tap or focus (app.js).
+	     data-order is the order the arrow keys walk them: the path of one order. -->
+	<g class="link" data-order="1" data-tip-title="POST /webhook/orders" data-tip="The shop sends each order to main's webhook. The workflow answers as soon as main has accepted the order, so a 200 only means main accepted it." data-tip-cmd="curl -X POST localhost:5690/webhook/orders">
+		<path class="edge work" d="M120,205 L178,205"/>
+		<text class="elabel work" x="60" y="240">shop</text>
+		<text class="elabel" x="16" y="190">POST /webhook/orders</text>
+	</g>
+	<g class="link" data-order="3" data-tip-title="enqueue job" data-tip="Main writes the execution to Postgres as new, then puts one job for it on the Bull queue in Redis. Main logs Enqueued execution N (job M)." data-tip-cmd="docker compose logs n8n-main | grep &quot;Enqueued execution&quot;">
+		<path class="edge work" d="M352,205 L438,205"/>
+		<text class="elabel work" x="354" y="193">enqueue job</text>
+	</g>
+	<g class="link" data-order="5" data-tip-title="take job" data-tip="A worker with a free slot takes the next job off the queue and runs the workflow. The worker logs Worker started execution N." data-tip-cmd="docker compose logs n8n-worker | grep &quot;Worker started execution&quot;">
+		<path class="edge work" d="M612,185 L690,120"/>
+		<path class="edge work" d="M612,225 L690,290"/>
+		<text class="elabel work" x="586" y="300">take job</text>
+	</g>
+	<g class="link" data-order="8" data-tip-title="POST /orders" data-tip="The workflow's HTTP Request node sends the order to the fulfilment API with the stored credential, and makes up to three attempts, a second apart." data-tip-cmd="docker compose logs fulfilment-api">
+		<path class="edge work" d="M866,120 L920,185"/>
+		<path class="edge work" d="M866,290 L920,225"/>
+		<text class="elabel work" x="872" y="322">POST /orders</text>
+	</g>
+	<g class="link" data-order="10" data-tip-title="manual test" data-tip="Clicking Execute in the editor starts a manual execution. With OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS unset, main runs it itself and calls the fulfilment API directly, without the queue or a worker." data-tip-cmd="docker compose logs n8n-main | grep -m1 OFFLOAD_MANUAL">
+		<path class="edge manual" d="M265,150 C 300,20 850,10 1000,160"/>
+		<text class="elabel manual" x="470" y="48">manual test: main runs it itself (offloading off)</text>
+		<text class="elabel manual" x="188" y="96">editor, Execute</text>
+	</g>
+	<g class="link" data-order="12" data-tip-title="reads and writes" data-tip="Main and the workers both use Postgres: main creates each execution record, the worker that runs it updates its status and timestamps, and both read the workflow and its encrypted credential." data-tip-cmd="./tools/evidence.sh executions">
+		<path class="edge data" d="M265,262 L265,372 L438,372"/>
+		<path class="edge data" d="M778,160 L778,372 L612,372"/>
+		<path class="edge data" d="M778,345 L778,372"/>
+		<text class="elabel" x="640" y="400">execution records, credentials</text>
+	</g>
+
+	<g class="node n-main" transform="translate(180,150)" data-order="2" data-tip-title="n8n-main" data-tip="Serves the editor and receives webhooks. In queue mode it's the producer: it records each execution and puts a job on the queue for a worker." data-tip-cmd="docker compose logs n8n-main">
+		<rect width="172" height="112" rx="4"/>
+		<text x="18" y="42">n8n-main</text>
+		<text class="sub" x="18" y="66">webhooks, editor</text>
+		<text class="sub" x="18" y="86">producer</text>
+	</g>
+	<g class="node n-redis" transform="translate(440,150)" data-order="4" data-tip-title="redis" data-tip="Holds the Bull queue that main writes jobs to and the workers read from, in one logical database, and carries pub/sub messages between main and the workers. In the baseline everything uses database 0." data-tip-cmd="docker compose exec redis redis-cli INFO keyspace">
+		<rect width="172" height="112" rx="4"/>
+		<text x="18" y="42">redis</text>
+		<text class="sub" x="18" y="66">bull:jobs, DB 0</text>
+		<text class="sub" x="18" y="86">pub/sub</text>
+	</g>
+	<g class="node n-worker" transform="translate(692,64)" data-order="6" data-tip-title="n8n-worker-1" data-tip="One of the two worker replicas, a consumer. It takes jobs off the queue and runs them. In the baseline it runs up to 5 executions at once." data-tip-cmd="docker compose logs n8n-worker">
+		<rect width="172" height="96" rx="4"/>
+		<text x="18" y="38">n8n-worker-1</text>
+		<text class="sub" x="18" y="62">consumer</text>
+		<text class="sub" x="18" y="80">concurrency 5</text>
+	</g>
+	<g class="node n-worker" transform="translate(692,248)" data-order="7" data-tip-title="n8n-worker-2" data-tip="The other worker replica, set up exactly like n8n-worker-1. Its log lines start with n8n-worker-2." data-tip-cmd="docker compose logs n8n-worker">
+		<rect width="172" height="96" rx="4"/>
+		<text x="18" y="38">n8n-worker-2</text>
+		<text class="sub" x="18" y="62">consumer</text>
+		<text class="sub" x="18" y="80">concurrency 5</text>
+	</g>
+	<g class="node n-api" transform="translate(922,150)" data-order="9" data-tip-title="fulfilment-api" data-tip="The downstream service the workflow calls. It works on 10 requests at a time, 300 ms each, and answers any request beyond that with HTTP 429 straight away." data-tip-cmd="curl localhost:5692/stats">
+		<rect width="168" height="112" rx="4"/>
+		<text x="18" y="42">fulfilment-api</text>
+		<text class="sub" x="18" y="66">capacity 10,</text>
+		<text class="sub" x="18" y="86">then HTTP 429</text>
+	</g>
+	<g class="node n-postgres" transform="translate(440,330)" data-order="11" data-tip-title="postgres" data-tip="Stores the workflow, the encrypted credential, and every execution record with its status and timestamps. The editor's Executions list reads from here." data-tip-cmd="./tools/evidence.sh executions">
+		<rect width="172" height="80" rx="4"/>
+		<text x="18" y="36">postgres</text>
+		<text class="sub" x="18" y="60">execution_entity</text>
+	</g>
+</svg>
+<div class="legend"><span>production work</span><span class="l-manual">manual test path in this lab</span><span class="l-data">reads and writes</span><span class="l-focus">where to look in this lesson</span></div>
+</template>
+
+<script src="commands.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

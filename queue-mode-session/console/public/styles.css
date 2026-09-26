@@ -1,0 +1,402 @@
+/* Queue-mode lab: lesson page and live panel.
+ *
+ * Serif for display headings only (page titles, section headings, the central
+ * question). Everything you read while working, from steps and tables to prompts
+ * and the live panel, is in the system sans, and code is in mono. The hero image
+ * is the only picture.
+ *
+ * Each accent has one job, and every state also has a word:
+ *   teal   links, the live panel, success
+ *   amber  where you write, keyboard focus, the diagram's "look here"
+ *   coral  the production path in the diagram, the one primary button
+ *   red    failures */
+
+:root {
+	--bg: #101725;
+	--raised: #172136;
+	--sunk: #0a0f1a;
+	--rule: #27344f;
+	--ink: #e4e9f2;
+	--dim: #a3abc4;
+	--teal: #45d3c0;
+	--amber: #f2b441;
+	--coral: #ff7a5c;
+	--red: #ff6b78;
+
+	--serif: Charter, 'Bitstream Charter', 'Iowan Old Style', 'Sitka Text', Cambria, 'Noto Serif', Georgia, serif;
+	--sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+	--mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+
+	--measure: 40rem; /* the text column: prose, commands, evidence, prompts */
+	--wide: 56rem;    /* the hero, the diagram, and page-level tables */
+	--gutter: 2.75rem;
+	--live-w: 23rem;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 4.5rem; } /* keeps focused elements clear of the sticky header */
+a, button, summary, label, input, textarea { touch-action: manipulation; }
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--ink);
+	font: 1.0625rem/1.6 var(--sans);
+	font-kerning: normal;
+}
+table, .num, aside.live { font-variant-numeric: tabular-nums; }
+a { color: var(--teal); text-underline-offset: 0.18em; text-decoration-thickness: 1px; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+code, pre, kbd { font-family: var(--mono); }
+code { font-size: 0.82em; padding: 0.05em 0.3em; background: var(--raised); border-radius: 3px; white-space: nowrap; }
+strong { font-weight: 700; color: #fff; }
+.pixel { image-rendering: pixelated; }
+.dim { color: var(--dim); }
+.small { font-size: 0.94rem; }
+.skip { position: absolute; left: -999px; top: 0.5rem; z-index: 50; padding: 0.4rem 0.8rem; background: var(--amber); color: #1a1204; font-weight: 700; }
+.skip:focus { left: 0.5rem; }
+svg.defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+/* The start page has two versions of its setup section; app.js sets body.in-lab. */
+body.in-lab .only-hosted, body:not(.in-lab) .only-lab { display: none; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---- type, ratio 1.25 ------------------------------------------------------ */
+h1, h2, h3 { color: #fff; line-height: 1.2; font-weight: 700; text-wrap: balance; }
+h1, h2, .brand, .question { font-family: var(--serif); }
+h1 { font-size: 2.4rem; margin: 0 0 0.35rem; letter-spacing: -0.01em; }
+h2 { font-size: 1.55rem; margin: 3rem 0 0.8rem; }
+h3 { font-size: 1.15rem; margin: 2rem 0 0.5rem; }
+/* Step titles and the headings inside answers are working text, not display. */
+.step h2, details h3, aside.live h2 { font-family: var(--sans); font-size: 1.05rem; font-weight: 650; margin: 0 0 0.4rem; }
+p, ul, ol { margin: 0 0 1rem; }
+li { margin-bottom: 0.4rem; }
+.meta { margin: 0 0 2rem; color: var(--dim); }
+section.page h1:focus { outline: none; }
+
+/* ---- header ---------------------------------------------------------------- */
+.top {
+	position: sticky; top: 0; z-index: 20;
+	display: flex; align-items: center; gap: 1.4rem;
+	padding: 0.5rem 1.2rem;
+	background: var(--bg);
+	border-bottom: 1px solid var(--rule);
+}
+.brand { color: #fff; text-decoration: none; white-space: nowrap; font-weight: 700; font-size: 1rem; }
+/* The five lessons read as one path, joined by arrows (teal once you've walked
+ * that stretch). The three reference pages sit apart after a divider. */
+nav.lessons { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 0.9rem; overflow-x: auto; scrollbar-width: none; }
+nav.lessons::-webkit-scrollbar { display: none; }
+nav.lessons.overflows:not(.at-end) {
+	-webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+	mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+}
+nav.lessons :is(ol, ul) { display: flex; align-items: center; margin: 0; padding: 0; list-style: none; }
+nav.lessons ul.ref { padding-left: 0.9rem; border-left: 1px solid var(--rule); }
+nav.lessons li { display: flex; align-items: center; margin: 0; }
+nav.lessons ol.seq li + li::before {
+	content: ''; flex: none; width: 16px; height: 10px; margin: 0 0.05rem;
+	background: #4c5a7a;
+	-webkit-mask: var(--arrow) center / contain no-repeat; mask: var(--arrow) center / contain no-repeat;
+}
+nav.lessons ol.seq li[data-state='done'] + li::before { background: var(--teal); }
+:root { --arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath d='M1 5h13M10 1.5 13.5 5 10 8.5' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+	--lock: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 12'%3E%3Cpath d='M2.5 5V3.5a2.5 2.5 0 0 1 5 0V5' fill='none' stroke='%23000' stroke-width='1.4'/%3E%3Crect x='1' y='5' width='8' height='6.5' rx='1.2'/%3E%3C/svg%3E"); }
+nav.lessons a { display: flex; align-items: center; gap: 0.3rem; padding: 0.35rem 0.5rem; color: var(--dim); text-decoration: none; white-space: nowrap; font-size: 0.9rem; }
+nav.lessons a:hover { color: var(--ink); }
+nav.lessons a:is([data-state='open'], [data-state='done']) { color: var(--ink); }
+nav.lessons a[aria-current='page'] { color: #fff; box-shadow: inset 0 -2px 0 var(--ink); }
+nav.lessons a[data-state='locked'] { opacity: 0.55; filter: blur(0.4px); }
+nav.lessons a[data-state='locked']:is(:hover, :focus-visible, [aria-current='page']) { opacity: 0.85; filter: none; }
+nav.lessons .done { color: var(--teal); }
+.lock { display: inline-block; flex: none; width: 9px; height: 11px; background: currentColor; -webkit-mask: var(--lock) center / contain no-repeat; mask: var(--lock) center / contain no-repeat; }
+/* Half-screen browsers next to a terminal: tighten the header so every page fits. */
+@media (max-width: 1180px) {
+	.top { gap: 0.9rem; }
+	nav.lessons { gap: 0.5rem; }
+	nav.lessons ul.ref { padding-left: 0.5rem; }
+	nav.lessons a { padding-inline: 0.3rem; font-size: 0.86rem; }
+	nav.lessons ol.seq li + li::before { width: 12px; }
+	.live-toggle .long { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+.live-toggle {
+	display: flex; align-items: center; gap: 0.5rem; cursor: pointer; white-space: nowrap;
+	padding: 0.25rem 0.75rem; border: 1px solid var(--rule); border-radius: 999px;
+	background: transparent; color: var(--ink); font: 0.86rem var(--sans);
+}
+.live-toggle:hover { border-color: var(--teal); }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--dim); }
+.dot.on { background: var(--teal); border-color: var(--teal); }
+
+/* ---- page layout ------------------------------------------------------------- */
+main { max-width: calc(var(--wide) + 2.8rem); margin: 0 auto; padding: 2.4rem 1.4rem 6rem; }
+body.live-open main { margin-right: calc(var(--live-w) + 1rem); }
+section.page { display: none; }
+section.page.active { display: block; }
+/* One text column with a single right edge. Only the page title, the hero, the
+ * diagram and page-level tables are wider. Step bodies sit inside .steps, so
+ * they end on the same edge as everything else. */
+section.page > :not(h1, .hero, .diagram-slot, table) { max-width: var(--measure); }
+/* Docker output is columnar, so it gets the wide column like a table. */
+#page-docker > :is(.evidence, .cmd-wrap, .cmd) { max-width: var(--wide); }
+
+/* ---- hero -------------------------------------------------------------------- */
+/* The art has its own navy background, so it sits framed inside the column. */
+.hero { margin: 0 0 2.2rem; }
+.hero img { display: block; width: 100%; height: auto; border-radius: 6px; }
+.hero .title { padding: 1.6rem 0 0; }
+.hero h1 { margin: 0 0 0.6rem; font-size: 2.6rem; line-height: 1.08; }
+.hero p { margin: 0; font-size: 1.1rem; color: var(--dim); }
+.question { margin: 0 0 2.2rem; font-size: 1.5rem; line-height: 1.35; color: #fff; }
+
+/* ---- numbered steps, strung on one line like a trace ------------------------- */
+.steps { position: relative; margin: 2.4rem 0; }
+.steps::before { content: ''; position: absolute; left: calc(0.85rem - 0.5px); top: 1.8rem; bottom: 2rem; border-left: 1px solid var(--rule); }
+.step { position: relative; margin: 0 0 2.4rem; padding-left: var(--gutter); }
+.step > .n {
+	position: absolute; left: 0; top: 0;
+	display: grid; place-items: center; width: 1.7rem; height: 1.7rem; border-radius: 50%;
+	background: var(--bg); border: 1px solid var(--dim); color: var(--ink); font-size: 0.85rem; font-weight: 600;
+}
+.step .body { min-width: 0; }
+.step h2 { padding-top: 0.05rem; }
+
+/* ---- the customer's ticket ----------------------------------------------------- */
+.ticket { max-width: var(--measure); margin: 0 0 2.2rem; }
+.ticket-meta { margin: 0 0 0.7rem; font-size: 0.9rem; color: var(--dim); }
+.ticket blockquote { margin: 0 0 0.9rem; padding: 0.1rem 0 0.1rem 1.1rem; border-left: 3px solid var(--dim); font-size: 1.08rem; color: #fff; }
+.ticket blockquote p { margin: 0 0 0.7rem; }
+.ticket blockquote p:last-child { margin-bottom: 0; }
+.ticket > p:last-child { font-size: 0.95rem; color: var(--dim); }
+
+/* ---- commands -------------------------------------------------------------------- */
+/* A command box. app.js wraps each .cmd so the Copy button gets its own column:
+ * the command scrolls sideways in its area and never runs under the button. */
+.cmd {
+	margin: 0.5rem 0 1.1rem; padding: 0.7rem 0.95rem;
+	background: var(--sunk); border: 1px solid var(--rule); border-radius: 3px;
+	font: 0.86rem/1.55 var(--mono); color: #e6eefb; white-space: pre; overflow-x: auto;
+}
+.cmd::before { content: '$ '; color: var(--dim); }
+.cmd.multi::before { content: none; }
+.cmd { scrollbar-width: none; }
+.cmd::-webkit-scrollbar { display: none; }
+.cmd.overflows:not(.at-end) {
+	-webkit-mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
+	mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
+}
+.cmd-wrap { display: flex; align-items: center; margin: 0.5rem 0 1.1rem; background: var(--sunk); border: 1px solid var(--rule); border-radius: 3px; }
+.cmd-wrap:has(> .multi) { align-items: flex-start; }
+.cmd-wrap > .cmd { flex: 1; min-width: 0; margin: 0; border: 0; background: none; }
+.copy {
+	flex: none; margin: 0.45rem 0.5rem 0.45rem 0.25rem; cursor: pointer; padding: 0.1rem 0.55rem;
+	user-select: none; -webkit-user-select: none; /* keeps "Copy" out of a hand-made selection */
+	background: var(--raised); color: var(--ink); border: 1px solid var(--rule); border-radius: 3px; font: 0.75rem var(--sans);
+}
+.copy:hover { border-color: var(--ink); }
+/* Command parts with an explanation: dotted underline while you're in the box. */
+.tok { cursor: help; border-radius: 2px; }
+:is(.cmd, .evidence pre):is(:hover, :focus-visible) .tok { text-decoration: underline dotted #56628a; text-underline-offset: 4px; }
+.evidence pre:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
+.tok.on { background: #22304b; color: #fff; text-decoration-color: var(--amber); }
+.cmd:focus-visible { outline: none; }
+.cmd-wrap:has(> .cmd:focus-visible) { outline: 2px solid var(--amber); outline-offset: 2px; }
+#tip {
+	position: fixed; z-index: 40; max-width: 21rem; padding: 0.55rem 0.75rem;
+	background: #1d2a42; color: var(--ink); border: 1px solid #34466a; border-radius: 5px;
+	font: 0.86rem/1.45 var(--sans); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); pointer-events: none;
+}
+#tip code.evidence-cmd { margin: 0.45rem 0 0; color: var(--dim); font-size: 0.78rem; }
+#tip code { display: block; width: max-content; max-width: 100%; margin-bottom: 0.25rem; padding: 0; background: none; color: #fff; font-size: 0.82rem; white-space: pre-wrap; }
+pre.log { margin: 0.4rem 0 0.5rem; padding: 0.5rem 0.75rem; background: var(--sunk); border-left: 2px solid var(--red); border-radius: 2px; font-size: 0.8rem; line-height: 1.5; white-space: pre-wrap; color: #e6eefb; }
+.where { color: var(--dim); }
+
+/* ---- prompts: the places you write ---------------------------------------------------- */
+.prompt { margin: 0.9rem 0 1.4rem; }
+.prompt label { display: block; margin-bottom: 0.35rem; color: var(--amber); font-size: 0.98rem; line-height: 1.45; }
+textarea, input:is([type='text'], [type='url']) {
+	width: 100%; padding: 0.55rem 0.8rem; resize: vertical;
+	color: var(--ink); background: var(--raised);
+	border: 1px solid var(--rule); border-left: 3px solid var(--amber); border-radius: 2px;
+	font: 1rem/1.5 var(--sans);
+}
+textarea { min-height: 4.4rem; }
+textarea:focus-visible, input:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+.saved { min-height: 1.1em; margin-top: 0.2rem; font-size: 0.82rem; color: var(--dim); }
+
+.checkline { display: flex; align-items: flex-start; gap: 0.7rem; margin: 2.4rem 0 1rem; font-size: 1rem; cursor: pointer; }
+.checkline input { flex: none; width: 1.1rem; height: 1.1rem; margin-top: 0.3rem; accent-color: var(--teal); }
+.checkline .unlock { display: block; margin-top: 0.15rem; font-size: 0.85rem; color: var(--dim); }
+
+/* ---- a locked lesson: title stays sharp, the rest blurs behind the gate card ---- */
+section.page.locked > :not(h1, .meta, .gate) { filter: blur(5px); opacity: 0.4; user-select: none; pointer-events: none; }
+.gate {
+	position: sticky; top: 4.5rem; z-index: 5; margin: 0 0 2rem; padding: 1rem 1.2rem 0.3rem;
+	background: var(--raised); border: 1px solid var(--rule); border-radius: 6px; box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+}
+.gate p { display: flex; align-items: center; gap: 0.55rem; margin: 0; font-weight: 600; color: #fff; }
+.gate .lock { color: var(--amber); }
+.gate .row { margin: 0.9rem 0; }
+
+/* ---- disclosures: three kinds, each styled for its job ---------------------------------
+ *   hint      small, inline, opens under its summary line
+ *   recorded  saved rehearsal output, drawn dashed like every recorded block
+ *   reveal    the answer, set off by rules above and below */
+details > summary { cursor: pointer; list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: '+'; display: inline-block; width: 1.1rem; color: var(--dim); font-family: var(--mono); }
+details[open] > summary::before { content: '\2212'; }
+details > .inner { min-width: 0; }
+
+details.hint { margin: 0.3rem 0; }
+details.hint > summary { color: var(--teal); font-size: 0.95rem; }
+details.hint > .inner { margin: 0.4rem 0 0.8rem 0.35rem; padding-left: 1rem; border-left: 1px solid var(--rule); }
+
+details.recorded { margin: 2rem 0 0; border: 1px dashed var(--rule); border-radius: 3px; }
+details.recorded > summary { padding: 0.6rem 0.9rem; color: var(--dim); }
+details.recorded > .inner { padding: 0 0.9rem 0.6rem; }
+
+details.reveal { margin: 2.4rem 0 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+details.reveal > summary { padding: 0.9rem 0; font-weight: 650; color: #fff; }
+details.reveal > .inner { padding: 0 0 1.2rem; }
+details.reveal h3 { margin-top: 1.6rem; }
+details.reveal h3:first-child { margin-top: 0.4rem; }
+.confirm { margin: 0.8rem 0 0; padding: 0.9rem 1.1rem 0.1rem; background: var(--raised); border: 1px solid var(--rule); border-left: 3px solid var(--amber); border-radius: 4px; }
+.confirm p { margin: 0; }
+.confirm strong { color: var(--amber); }
+.confirm .row { margin: 0.8rem 0; }
+
+.evidence { margin: 0.6rem 0 1.2rem; background: var(--sunk); border: 1px dashed var(--rule); border-radius: 3px; }
+.evidence .label { padding: 0.45rem 0.85rem; border-bottom: 1px dashed var(--rule); font-size: 0.88rem; line-height: 1.4; color: var(--dim); }
+.evidence .tag { margin-right: 0.4rem; color: var(--amber); font-weight: 700; }
+details.evidence > summary.label { cursor: pointer; }
+details.evidence:not([open]) > .label { border-bottom: 0; }
+.evidence pre { margin: 0; padding: 0.75rem 0.9rem; overflow-x: auto; font-size: 0.78rem; line-height: 1.5; color: #d2dbec; }
+.evidence pre { scrollbar-width: none; }
+.evidence pre::-webkit-scrollbar { display: none; }
+.evidence pre.overflows:not(.at-end) {
+	-webkit-mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
+	mask-image: linear-gradient(to right, #000 calc(100% - 3rem), transparent);
+}
+.evidence .cmdline { color: var(--dim); }
+.evidence table { margin: 0; }
+/* How to read an output: the part you see, then what it means. */
+dl.reading { margin: 0.2rem 0 2.2rem; }
+dl.reading dt { margin: 0.7rem 0 0.1rem; font-size: 0.92rem; font-weight: 600; color: #fff; }
+dl.reading dt code { font-weight: 400; }
+dl.reading dd { margin: 0; color: var(--ink); }
+
+/* ---- tables ------------------------------------------------------------------------ */
+table { width: 100%; margin: 1rem 0 1.8rem; border-collapse: collapse; font-size: 0.92rem; line-height: 1.5; }
+th, td { padding: 0.55rem 0.8rem 0.55rem 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--rule); }
+th { color: var(--dim); font-weight: 600; font-size: 0.85rem; }
+td code { white-space: nowrap; }
+.num { text-align: right; white-space: nowrap; }
+td.num { font-family: var(--mono); font-size: 0.9em; }
+
+/* ---- architecture diagram ------------------------------------------------------------ */
+.diagram { display: block; width: 100%; height: auto; margin: 1.4rem 0 0.4rem; }
+.diagram .node rect { fill: var(--raised); stroke: var(--rule); stroke-width: 1.5; }
+.diagram .node text { fill: var(--ink); font: 600 16px var(--mono); }
+.diagram .node text.sub { fill: var(--dim); font: 13px var(--sans); }
+.diagram .edge { fill: none; stroke: var(--dim); stroke-width: 1.6; }
+.diagram .edge.work { stroke: var(--coral); marker-end: url(#arrow-work); }
+.diagram .edge.manual { stroke: var(--teal); stroke-dasharray: 6 5; marker-end: url(#arrow-manual); }
+.diagram .edge.data { stroke: #737ca0; stroke-dasharray: 3 4; }
+.diagram .elabel { fill: var(--dim); font: 13px var(--sans); }
+.diagram .elabel.manual { fill: var(--teal); }
+.diagram .elabel.work { fill: var(--coral); }
+.diagram .focus rect { stroke: var(--amber); stroke-width: 3; }
+.diagram .focus text:first-of-type { fill: var(--amber); }
+/* Diagram parts explain themselves on hover, tap or focus. */
+.diagram [data-tip] { cursor: help; }
+.diagram .hit { fill: none; stroke: transparent; stroke-width: 24; pointer-events: stroke; }
+.diagram .node.on rect { stroke: var(--ink); }
+.diagram .link.on .edge { stroke-width: 3; }
+.diagram .link.on .elabel { fill: #fff; }
+.diagram:focus { outline: none; }
+.diagram:focus-visible { outline: 2px solid var(--amber); outline-offset: 4px; border-radius: 4px; }
+.legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1.4rem; margin: 0 0 2rem; font-size: 0.85rem; color: var(--dim); }
+.legend span::before { content: ''; display: inline-block; width: 22px; margin-right: 0.45rem; vertical-align: middle; border-top: 2px solid var(--coral); }
+.legend .l-manual::before { border-top: 2px dashed var(--teal); }
+.legend .l-data::before { border-top: 2px dotted #737ca0; }
+.legend .l-focus::before { width: 14px; height: 10px; border: 2px solid var(--amber); border-radius: 2px; }
+
+/* ---- small reference lists ----------------------------------------------------------- */
+.links { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1.2rem; max-width: var(--measure); margin: 1.2rem 0 1.8rem; }
+.links dt { color: var(--dim); }
+.links dd { margin: 0; }
+
+/* ---- live panel -------------------------------------------------------------------- */
+aside.live {
+	position: fixed; top: 49px; right: 0; bottom: 0; z-index: 15; width: var(--live-w); overflow-y: auto;
+	padding: 1rem 1.1rem 3rem; background: var(--raised); border-left: 1px solid var(--rule);
+	overscroll-behavior: contain;
+	font-size: 0.9rem; line-height: 1.5;
+	transform: translateX(100%); visibility: hidden;
+	transition: transform 0.18s ease, visibility 0s linear 0.18s;
+}
+body.live-open aside.live { transform: none; visibility: visible; transition: transform 0.18s ease; }
+aside.live h3 { margin: 1.3rem 0 0.3rem; font-size: 0.85rem; font-weight: 600; color: var(--dim); }
+aside.live table { margin: 0.3rem 0; font-size: 0.84rem; }
+aside.live th, aside.live td { padding: 0.25rem 0.4rem 0.25rem 0; }
+.live-source { color: var(--dim); font-size: 0.85rem; }
+ul.plain { margin: 0.2rem 0 0.4rem; padding: 0; list-style: none; }
+ul.plain li { margin: 0 0 0.15rem; }
+.live-source .tag { color: var(--teal); font-weight: 700; }
+.live-url { display: flex; gap: 0.4rem; margin: 0.6rem 0; }
+.live-url input { padding: 0.35rem 0.5rem; border-left-width: 1px; font: 0.8rem var(--mono); }
+.st-success { color: var(--teal); }
+.st-error, .st-crashed { color: var(--red); }
+.st-new, .st-running, .st-waiting { color: var(--amber); }
+.bar { height: 8px; margin: 0.35rem 0; overflow: hidden; background: var(--bg); border-radius: 4px; }
+.bar > div { height: 100%; background: var(--teal); }
+.bar.full > div { background: var(--red); }
+
+.btn { display: inline-block; cursor: pointer; padding: 0.4rem 0.95rem; color: var(--ink); background: var(--raised); border: 1px solid var(--rule); border-radius: 3px; font: 0.9rem var(--sans); text-decoration: none; }
+.btn:hover { border-color: var(--ink); }
+.btn.primary { background: var(--coral); border-color: var(--coral); color: #1d0e08; font-weight: 650; }
+.btn.quiet { padding-inline: 0.4rem; background: none; border-color: transparent; color: var(--dim); text-decoration: underline; text-underline-offset: 0.2em; }
+.btn.quiet:hover { color: var(--ink); border-color: transparent; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 1.2rem 0; }
+
+.pager { display: flex; justify-content: space-between; gap: 1rem; margin-top: 3.4rem; padding-top: 1.1rem; border-top: 1px solid var(--rule); }
+.pager a { text-decoration: none; }
+.pager a:hover { text-decoration: underline; }
+.pager .next { margin-left: auto; text-align: right; }
+.pager a.locked { color: var(--dim); }
+.pager small { display: block; color: var(--dim); font-size: 0.8rem; }
+
+.notes-list h2 { margin-top: 2rem; font-size: 1.2rem; }
+.notes-list .note { max-width: var(--measure); padding: 0.6rem 0; border-bottom: 1px solid var(--rule); }
+.notes-list .q { color: var(--amber); font-size: 0.95rem; }
+.notes-list .a { white-space: pre-wrap; }
+.notes-list .a.empty { color: var(--dim); }
+
+/* ---- narrow screens ------------------------------------------------------------------ */
+@media (max-width: 1500px) { body.live-open main { margin-left: 1rem; } }
+@media (max-width: 760px) {
+	:root { --gutter: 2.4rem; }
+	body { font-size: 1rem; }
+	h1 { font-size: 1.95rem; }
+	main { padding: 1.2rem 1rem 5rem; }
+	.hero { margin: 0 0 1.6rem; }
+	.hero .title { padding: 1.2rem 0 0; }
+	.hero h1 { font-size: 1.95rem; }
+	.question { font-size: 1.25rem; }
+	table { display: block; overflow-x: auto; }
+	td code, code { white-space: normal; overflow-wrap: anywhere; }
+	aside.live { width: 100%; }
+	body.live-open main { margin-right: auto; }
+	.links { grid-template-columns: 1fr; gap: 0; }
+	.links dd { margin-bottom: 0.6rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	aside.live, body.live-open aside.live { transition: none; }
+}
+
+@media print {
+	.top, aside.live, .copy, .pager, .skip { display: none !important; }
+	section.page { display: block !important; }
+	body { background: #fff; color: #000; }
+}
