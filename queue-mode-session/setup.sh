@@ -12,7 +12,28 @@ set -uo pipefail
 . "$(dirname "$0")/lib/common.sh"
 
 step "1/4  Pulling images (first run only takes a while)"
-docker compose pull --quiet 2>&1 | grep -v '^$' || true
+# Compose's exit status decides, not grep's: a quiet pull that succeeds prints
+# nothing, and grep -v reports that as a failure.
+pull_out=$(docker compose pull --quiet 2>&1); pull_rc=$?
+printf '%s\n' "$pull_out" | grep -v '^$' || true
+if [ "$pull_rc" -ne 0 ]; then
+	# A failed pull is fine on a re-run as long as every image is already here.
+	missing=$(docker compose config --images 2>/dev/null | sort -u | while read -r img; do
+		docker image inspect "$img" >/dev/null 2>&1 || echo "$img"
+	done)
+	if [ -n "$missing" ]; then
+		bad "could not pull: ${missing//$'\n'/, }"
+		case $pull_out in
+		*toomanyrequests*)
+			info "Docker Hub's limit for anonymous pulls. Log in to both registries the images come from, then re-run:"
+			info "  docker login                  (postgres, redis)"
+			info "  docker login docker.n8n.io    (n8n, same Docker Hub account)"
+			;;
+		esac
+		exit 1
+	fi
+	info "the pull failed, but every image is already on this machine, so carrying on with those"
+fi
 ok "images present: n8n 2.33.0, postgres 17-alpine, redis 7.4.11-alpine"
 
 step "2/4  Starting Postgres, Redis, fulfilment-api and the console"
